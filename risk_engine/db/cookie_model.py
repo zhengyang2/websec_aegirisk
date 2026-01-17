@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, DateTime
-from db_setup import Base
+from .db_setup import Base
 
 
 class DeviceToken(Base):

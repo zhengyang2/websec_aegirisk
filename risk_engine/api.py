@@ -21,9 +21,11 @@ ENGINE_API_KEY = "change-me"
 
 DB_PATH = "db/rba.db"
 
-@app.on_event("startup")
+@RISK_ENGINE.on_event("startup")
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
 
 # used to secure RBA API. verify when API called is it the web app
 def require_api_key(x_api_key: str | None):

@@ -19,6 +19,8 @@ def generate_device_token(db: Session) -> tuple[str, datetime]:
     """
     Returns (raw_token, expires_at). Stores only hash in DB.
     """
+
+    # gen random token string and hash
     raw_token = secrets.token_urlsafe(32)
     token_hash = sha256_hex(raw_token)
 

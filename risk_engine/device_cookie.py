@@ -3,7 +3,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
-from db.cookie_model import DeviceToken
+from risk_engine.db.cookie_model import DeviceToken
 
 
 COOKIE_NAME = "__Host_rba_dt"

@@ -1,9 +1,11 @@
 # websec_aegirisk
 
-to start risk engine API 
-cd into risk engine
+to start risk engine API in root folder
+
 ```
-fastapi dev .\api.py --port 8001
+
+uvicorn risk_engine.api:app --reload --port 8001
+
 ```
 
 

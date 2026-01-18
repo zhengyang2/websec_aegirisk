@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, DateTime
-from .db_setup import Base
+from risk_engine.db.db_setup import Base
 
 
 class DeviceToken(Base):

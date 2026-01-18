@@ -9,6 +9,7 @@ from db.cookie_model import DeviceToken
 
 #component import
 from device_cookie import generate_device_token
+from json_schema import GenerateCookieRequestJSON
 
 
 RISK_ENGINE = FastAPI(title="RBA Risk Engine")
@@ -49,12 +50,16 @@ def read_root():
 
 # cookies API
 @RISK_ENGINE.post("/device/generate")
-def generate(db: Session = Depends(get_db)):
+def generate(request: GenerateCookieRequestJSON, db: Session = Depends(get_db)):
     require_api_key("replace")
 
-    raw_token, exp_date = generate_device_token(db, "user1", "device1")
+    raw_token, exp_date, cookie_name = generate_device_token(db, request.user_id, request.device_id)
 
-    return {raw_token:exp_date}
+    return {
+        "cookie_name": cookie_name,
+        "cookie_value": raw_token,
+        "expires_at_utc": exp_date.isoformat()
+        }
 
 
 #TODO: make rotate cookie api

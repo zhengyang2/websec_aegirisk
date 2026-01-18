@@ -17,7 +17,7 @@ def sha256_hex(s: str) -> str:
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-def generate_device_token(db: Session, user, device) -> tuple[str, datetime]:
+def generate_device_token(db: Session, user, device) -> tuple[str, datetime, str]:
     """
     Returns (raw_token, expires_at). Stores only hash in DB.
     """
@@ -39,4 +39,4 @@ def generate_device_token(db: Session, user, device) -> tuple[str, datetime]:
     ))
     db.commit()
 
-    return raw_token, exp
+    return raw_token, exp , COOKIE_NAME

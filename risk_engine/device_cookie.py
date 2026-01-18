@@ -1,6 +1,7 @@
 import secrets
 import hashlib
 from datetime import datetime, timedelta, timezone
+from sqlalchemy.orm import Session
 
 from db.cookie_model import DeviceToken
 

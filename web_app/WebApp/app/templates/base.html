@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mock WebApp</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 520px; margin: 40px auto; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; }
+    .row { margin: 10px 0; }
+    input { width: 100%; padding: 10px; box-sizing: border-box; }
+    button { padding: 10px 14px; cursor: pointer; }
+    .error { color: #b00020; margin-top: 8px; }
+    a { text-decoration: none; }
+    nav { display: flex; gap: 12px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/register">Register</a>
+    <a href="/login">Login</a>
+  </nav>
+
+  {% block content %}{% endblock %}
+</body>
+</html>

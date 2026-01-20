@@ -51,14 +51,14 @@ def generate_device_token(db: Session, user, device) -> tuple[str, datetime, str
     now = utcnow()
     exp = now + timedelta(days=TOKEN_TTL_DAYS)
     try:
-        # revoke existing active token
+        # revoke existing active token find and change revoke to 1
         db.query(DeviceToken).filter(
             DeviceToken.bound_user_id == user,
             DeviceToken.bound_device_id == device,
             DeviceToken.revoked == 0
         ).update({"revoked": 1}, synchronize_session=False)
 
-        #
+        # insert new row
         db.add(DeviceToken(
             token_hash=token_hash,
             bound_device_id=device,
@@ -71,5 +71,8 @@ def generate_device_token(db: Session, user, device) -> tuple[str, datetime, str
 
     except IntegrityError:
         db.rollback()
-
+        raise HTTPException(
+            status_code=409,
+            detail="Active device token already exists"
+        )
     return raw_token, exp, COOKIE_NAME

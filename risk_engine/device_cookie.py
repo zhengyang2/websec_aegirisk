@@ -117,7 +117,7 @@ def generate_device_token(db: Session,
             result["case"] = case
             result["rotate"] = True
             result["raw_token"] = raw_token
-            result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
+            result["expires_at_utc"] = exp.isoformat()
 
             return result
 

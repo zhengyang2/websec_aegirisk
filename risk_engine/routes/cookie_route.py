@@ -2,7 +2,7 @@ from fastapi import Depends, APIRouter
 from sqlalchemy.orm import Session
 
 from risk_engine.dependancy import get_db, require_api_key
-from risk_engine.device_cookie import generate_device_token
+from risk_engine.component.device_cookie import generate_device_token
 from risk_engine.json_schema import GenerateCookieRequestJSON
 
 

@@ -1,10 +1,9 @@
 from risk_engine.db.db_setup import SessionLocal
 from fastapi import Header, HTTPException
 
-
+from risk_engine.config import ENFORCE_API_KEY_FLAG, ENGINE_API_KEY
 # use to check when web app call that it is secure
-ENFORCE_API_KEY_FLAG = 0
-ENGINE_API_KEY = "change-me"
+
 
 
 

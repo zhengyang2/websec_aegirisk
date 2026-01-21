@@ -9,9 +9,8 @@ from fastapi import HTTPException
 from risk_engine.db.cookie_model import DeviceToken
 from risk_engine.json_schema import DeviceTokenResult
 
-COOKIE_NAME = "__Host_rba_dt"
-TOKEN_TTL_DAYS = 90
-EXPIRES_WITHIN_DAYS = 7
+from risk_engine.config import COOKIE_NAME, TOKEN_TTL_DAYS, EXPIRES_WITHIN_DAYS
+
 
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
@@ -54,7 +53,7 @@ def generate_device_token(db: Session,
                 )
                 .one_or_none()
             )
-            print(active)
+
 
             # Case 1: First issue (no active token)
             if active is None:

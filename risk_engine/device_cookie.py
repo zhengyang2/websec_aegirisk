@@ -29,67 +29,67 @@ def generate_device_token(db: Session,
 
 
     """
-    # define result
-    result: DeviceTokenResult = {
-        "case": None,
-        "rotate": False,
-        "raw_token": None,
-        "expires_at_utc": None,
-        "cookie_name": COOKIE_NAME,
-    }
-
-    now = datetime.utcnow()
-
-    # check for active token
-
-    active = (
-        db.query(DeviceToken)
-        .filter(
-            DeviceToken.bound_user_id == user,
-            DeviceToken.bound_device_id == device,
-            DeviceToken.revoked == 0
-        )
-        .one_or_none()
-    )
-    print(active)
-
-    # Case 1: First issue (no active token)
-    if active is None:
-        case = "first_issue"
-        should_rotate = True
-
-    # Case 2: Risk-triggered rotation
-    elif force_rotate:
-        case = "risk_rotate"
-        should_rotate = True
-
-    # Case 3: Periodic rotation (near expiry)
-    elif (active.expires_at_utc - now) <= timedelta(days=EXPIRES_WITHIN_DAYS):
-        case = "periodic_rotate"
-        should_rotate = True
-
-    # Case 4: No rotation needed
-    else:
-        case = "no_rotate"
-        should_rotate = False
-
-
-    if not should_rotate:
-        # only edit field that change
-        result["case"] = case
-        result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
-
-        return result
-
-    # gen random token string and hash
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = sha256_hex(raw_token)
-    exp = now + timedelta(days=TOKEN_TTL_DAYS)
-
 
     try:
-        # revoke existing active token find and change revoke to 1
         with db.begin():
+            # define result
+            result: DeviceTokenResult = {
+                "case": None,
+                "rotate": False,
+                "raw_token": None,
+                "expires_at_utc": None,
+                "cookie_name": COOKIE_NAME,
+            }
+
+            now = datetime.utcnow()
+
+            # check for active token
+
+            active = (
+                db.query(DeviceToken)
+                .filter(
+                    DeviceToken.bound_user_id == user,
+                    DeviceToken.bound_device_id == device,
+                    DeviceToken.revoked == 0
+                )
+                .one_or_none()
+            )
+            print(active)
+
+            # Case 1: First issue (no active token)
+            if active is None:
+                case = "first_issue"
+                should_rotate = True
+
+            # Case 2: Risk-triggered rotation
+            elif force_rotate:
+                case = "risk_rotate"
+                should_rotate = True
+
+            # Case 3: Periodic rotation (near expiry)
+            elif (active.expires_at_utc - now) <= timedelta(days=EXPIRES_WITHIN_DAYS):
+                case = "periodic_rotate"
+                should_rotate = True
+
+            # Case 4: No rotation needed
+            else:
+                case = "no_rotate"
+                should_rotate = False
+
+
+            if not should_rotate:
+                # only edit field that change
+                result["case"] = case
+                result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
+
+                return result
+
+            # gen random token string and hash
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = sha256_hex(raw_token)
+            exp = now + timedelta(days=TOKEN_TTL_DAYS)
+
+
             # Re-check active token INSIDE the transaction
             active2 = (
                 db.query(DeviceToken)
@@ -115,6 +115,14 @@ def generate_device_token(db: Session,
                 revoked=0
             ))
 
+            result["case"] = case
+            result["rotate"] = True
+            result["raw_token"] = raw_token
+            result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
+
+            return result
+
+
     except IntegrityError:
 
         raise HTTPException(
@@ -122,10 +130,12 @@ def generate_device_token(db: Session,
             detail="Active device token already exists"
         )
 
-    result["case"] = case
-    result["rotate"] = True
-    result["raw_token"] = raw_token
-    result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
+    except Exception as e:
+        # Absolute last-resort catch-all
+        print("Unexpected error in device_cookie.py generate_device_token")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error")
 
-    return result
+
 

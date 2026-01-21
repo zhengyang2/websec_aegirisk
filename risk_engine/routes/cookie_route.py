@@ -23,6 +23,3 @@ def generate(request: GenerateCookieRequestJSON, db: Session = Depends(get_db)):
                                    force_rotate = request.force_rotate)
 
     return result
-
-#TODO: make rotate cookie api
-

@@ -7,7 +7,7 @@ to start risk engine API in root folder
 uvicorn risk_engine.api:app --reload --port 8001
 
 ```
-
+to see api opened use localhost/docs
 
 
 ## Risk Engine API key 

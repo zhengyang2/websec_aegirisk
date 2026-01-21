@@ -17,14 +17,12 @@ cookie_router = APIRouter( prefix="/cookie",
 @cookie_router.post("/generate")
 def generate(request: GenerateCookieRequestJSON, db: Session = Depends(get_db)):
 
-    raw_token, exp_date, cookie_name = generate_device_token(db, request.user_id, request.device_id)
+    result = generate_device_token(db,
+                                   user = request.user_id,
+                                   device = request.device_id,
+                                   force_rotate = request.force_rotate)
 
-    return {
-        "cookie_name": cookie_name,
-        "cookie_value": raw_token,
-        "expires_at_utc": exp_date.isoformat()
-        }
-
+    return result
 
 #TODO: make rotate cookie api
 

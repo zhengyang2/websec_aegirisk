@@ -1,8 +1,8 @@
 import secrets
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, MultipleResultsFound
 from fastapi import HTTPException
 
 
@@ -14,10 +14,6 @@ from risk_engine.config import COOKIE_NAME, TOKEN_TTL_DAYS, EXPIRES_WITHIN_DAYS
 
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 def generate_device_token(db: Session,
                           user: str,
@@ -33,7 +29,7 @@ def generate_device_token(db: Session,
         with db.begin():
             # define result
             result: DeviceTokenResult = {
-                "case": None,
+                "case": "no_rotate",
                 "rotate": False,
                 "raw_token": None,
                 "expires_at_utc": None,
@@ -43,7 +39,6 @@ def generate_device_token(db: Session,
             now = datetime.utcnow()
 
             # check for active token
-
             active = (
                 db.query(DeviceToken)
                 .filter(
@@ -53,6 +48,8 @@ def generate_device_token(db: Session,
                 )
                 .one_or_none()
             )
+
+
 
 
             # Case 1: First issue (no active token)
@@ -79,7 +76,7 @@ def generate_device_token(db: Session,
             if not should_rotate:
                 # only edit field that change
                 result["case"] = case
-                result["expires_at_utc"] = active.expires_at_utc.isoformat() if active else None
+                result["expires_at_utc"] = active.expires_at_utc.isoformat()
 
                 return result
 
@@ -89,19 +86,9 @@ def generate_device_token(db: Session,
             exp = now + timedelta(days=TOKEN_TTL_DAYS)
 
 
-            # Re-check active token INSIDE the transaction
-            active2 = (
-                db.query(DeviceToken)
-                .filter(
-                    DeviceToken.bound_user_id == user,
-                    DeviceToken.bound_device_id == device,
-                    DeviceToken.revoked == 0
-                )
-                .one_or_none()
-            )
-
-            if active2 is not None:
-                active2.revoked = 1
+            # Re-check active
+            if active is not None:
+                active.revoked = 1
 
 
             # insert new row
@@ -121,9 +108,19 @@ def generate_device_token(db: Session,
 
             return result
 
+    except MultipleResultsFound:
+        # invariant violation: more than one active token
+        print("Invariant violation: multiple active device tokens for user/device")
+        raise HTTPException(
+            status_code=500,
+            detail="Invariant violation: multiple active tokens"
+        )
 
-    except IntegrityError:
+    except HTTPException:
+        raise
 
+    except IntegrityError as e:
+        print(e)
         raise HTTPException(
             status_code=409,
             detail="Active device token already exists"
@@ -132,6 +129,7 @@ def generate_device_token(db: Session,
     except Exception as e:
         # Absolute last-resort catch-all
         print("Unexpected error in device_cookie.py generate_device_token")
+        print(e)
         raise HTTPException(
             status_code=500,
             detail="Internal server error")

@@ -16,6 +16,8 @@ inside webapp/webapp
 ```commandline
 uvicorn app.main:app --reload --port 8080
 
+start with PC ip
+ uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
 
 
 ```

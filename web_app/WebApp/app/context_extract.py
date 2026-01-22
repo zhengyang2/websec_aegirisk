@@ -1,7 +1,7 @@
 
 from fastapi import Request
 
-async def debug_print_request(request: Request):
+def debug_print_request(request: Request):
     print("=== REQUEST DEBUG START ===")
 
     # Basic info
@@ -27,8 +27,8 @@ async def debug_print_request(request: Request):
 
     print("=== REQUEST DEBUG END ===")
 
-def context_extract(request: Request):
-
+def request_context_extract(request: Request):
+    print(">>> request_context_extract CALLED <<<")
     debug_print_request(request)
 
 

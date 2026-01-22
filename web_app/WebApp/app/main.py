@@ -7,6 +7,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from .db import init_db
 from .auth import create_user, get_user_by_username, verify_password
 
+from .context_extract import request_context_extract
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Mock WebApp (Register/Login)")
@@ -17,7 +19,9 @@ app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-me", https_o
 
 @app.on_event("startup")
 def on_startup():
+    print("setup complete")
     init_db()
+    print("ROUTES:", [(r.path, getattr(r, "methods", None)) for r in app.routes], flush=True)
 
 def current_user(request: Request) -> str | None:
     return request.session.get("username")
@@ -53,6 +57,7 @@ def register(
 
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request):
+    print("login get accessed")
     return templates.TemplateResponse(
         "login.html",
         {"request": request, "error": None},
@@ -64,6 +69,12 @@ def login(
     username: str = Form(...),
     password: str = Form(...),
 ):
+    # request context extraction
+
+    context_features = request_context_extract(request, username)
+    print(context_features)
+    
+
     user = get_user_by_username(username)
     if not user or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
@@ -79,3 +90,5 @@ def login(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
+
+

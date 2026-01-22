@@ -10,6 +10,20 @@ uvicorn risk_engine.api:app --reload --port 8001
 to see api opened use localhost/docs
 
 
+
+to start web app 
+inside webapp/webapp
+```commandline
+uvicorn app.main:app --reload --port 8080
+
+start with PC ip
+ uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+
+
+```
+
+
+
 ## Risk Engine API key 
 
 every request from web need to tag along API key to secure the RBA API

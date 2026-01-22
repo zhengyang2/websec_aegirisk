@@ -1,5 +1,22 @@
+# Web framework
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
+
+# Templates & forms
 jinja2==3.1.4
-passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
+
+# Auth & security
+passlib==1.7.4
+itsdangerous==2.2.0
+
+# Password hashing (used via passlib)
+# NOTE: Using PBKDF2, bcrypt backend is NOT required
+# bcrypt intentionally omitted to avoid Windows issues
+
+# 2FA (TOTP)
+pyotp==2.9.0
+
+# QR code generation for 2FA setup
+qrcode==7.4.2
+pillow==10.4.0

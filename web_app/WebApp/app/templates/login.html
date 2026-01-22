@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h2>Login</h2>
-  <form method="post" action="/login">
+  <form method="post" action="{{ request.url }}">
     <div class="row">
       <label>Username</label>
       <input name="username" />

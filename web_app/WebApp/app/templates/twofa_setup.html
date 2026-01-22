@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>2FA Setup</h2>
+
+  {% if already_enabled %}
+    <p><b>2FA is already enabled.</b></p>
+    <form method="post" action="/2fa/disable">
+      <button type="submit">Disable 2FA</button>
+    </form>
+  {% else %}
+    <p>Scan the QR code using Google/Microsoft Authenticator, then enter the 6-digit code to confirm.</p>
+
+    {% if qr_uri %}
+      <img src="{{ qr_uri }}" style="max-width: 240px; display:block; margin: 12px 0;" />
+    {% endif %}
+
+    <p><b>Manual secret:</b> {{ secret }}</p>
+
+    <form method="post" action="/2fa/setup">
+      <div class="row">
+        <label>6-digit code</label>
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" />
+      </div>
+      <button type="submit">Confirm & Enable</button>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

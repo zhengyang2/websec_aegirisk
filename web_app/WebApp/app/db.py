@@ -16,6 +16,11 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+
+                -- 2FA fields
+                totp_secret TEXT,
+                is_2fa_enabled INTEGER NOT NULL DEFAULT 0,
+
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             """

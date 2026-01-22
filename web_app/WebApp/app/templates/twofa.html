@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>2FA Verification</h2>
+  <p>Enter the 6-digit code from your authenticator app.</p>
+
+  <form method="post" action="/2fa">
+    <div class="row">
+      <label>Authenticator code</label>
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" />
+    </div>
+    <button type="submit">Verify</button>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -31,27 +31,29 @@ def debug_print_request(request: Request):
 
     print("=== REQUEST DEBUG END ===")
 
-def request_context_extract(request: Request):
-    print(">>> request_context_extract CALLED <<<")
-    debug_print_request(request)
+def request_context_extract(request: Request, username):
 
-    ip = request.client.host
+    #debug_print_request(request)
 
-    print(ip)
 
+    ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
+    device_token = request.cookies.get("__Host_rba_dt")
 
-    print(user_agent)
+    timestamp_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    cookie_device_token = request.cookies.get("__Host_rba_dt")
 
-    print(cookie_device_token)
+    context = {
+        "username": username,
+        "event_time_utc": timestamp_utc,
+        "ip": ip,
+        "user_agent": user_agent,
+        "device_token": device_token,
+    }
 
-    timestamp_utc = datetime.now(timezone.utc)
 
-    print(timestamp_utc)
 
-    return
+    return context
 
 
 

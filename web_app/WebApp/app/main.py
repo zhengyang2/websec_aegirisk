@@ -70,8 +70,10 @@ def login(
     password: str = Form(...),
 ):
     # request context extraction
-    print("login post accessed ")
-    request_context_extract(request)
+
+    context_features = request_context_extract(request, username)
+    print(context_features)
+    
 
     user = get_user_by_username(username)
     if not user or not verify_password(password, user.password_hash):

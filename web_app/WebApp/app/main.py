@@ -1,7 +1,4 @@
 import os
-import io
-import base64
-
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -21,6 +18,8 @@ from .auth import (
     verify_totp,
 )
 
+from .context_extract import request_context_extract
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Mock WebApp (Register/Login + Adaptive 2FA)")
@@ -31,6 +30,7 @@ app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-me", https_o
 @app.on_event("startup")
 def on_startup():
     init_db()
+    print("ROUTES:", [(r.path, getattr(r, "methods", None)) for r in app.routes], flush=True)
 
 def current_user(request: Request) -> str | None:
     return request.session.get("username")
@@ -84,6 +84,12 @@ def login(
     username: str = Form(...),
     password: str = Form(...),
 ):
+    # request context extraction
+
+    context_features = request_context_extract(request, username)
+    print(context_features)
+
+
     user = get_user_by_username(username)
     if not user or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(

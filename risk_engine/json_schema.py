@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import TypedDict, Literal, Optional
+from typing import TypedDict, Literal, Optional, List
 
 
 # cookie JSON parameter definition
@@ -16,4 +16,15 @@ class DeviceTokenResult(TypedDict):
     expires_at_utc: Optional[str]
     cookie_name: str
 
+class RiskEvaluateRequestJSON(BaseModel):
+    username: str
+    event_time_utc: Optional[str] = None   # ISO string (web already generates this)
+    ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    device_token: Optional[str] = None
+
+class RiskEvaluateResponseJSON(BaseModel):
+    decision: Literal["allow", "challenge", "block"]
+    score: int
+    reasons: List[str]
 

@@ -1,4 +1,7 @@
 import os
+import io
+import base64
+import httpx
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -42,14 +45,27 @@ def make_qr_data_uri(text: str) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
 
-def should_challenge(request: Request, user_id: int) -> bool:
+RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
+RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
+
+def call_risk_engine(context_features: dict) -> dict:
     """
-    Temporary "risk decision" placeholder.
-    Later replace this with middleware/risk-engine decision:
-      allow / challenge / block
+    Calls risk engine /risk/evaluate and returns:
+      {"decision": "...", "score": int, "reasons": [...]}
+    If the risk engine is down, fail open (allow) for MVP.
     """
-    # Easiest manual testing: /login?force_2fa=1
-    return request.query_params.get("force_2fa") == "1"
+    headers = {}
+    if RISK_ENGINE_API_KEY:
+        headers["X-API-Key"] = RISK_ENGINE_API_KEY  # matches your require_api_key dependency style
+
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.post(f"{RISK_ENGINE_URL}/risk/evaluate", json=context_features, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[risk] engine call failed, fail-open allow. err={e}", flush=True)
+        return {"decision": "allow", "score": 0, "reasons": ["risk_engine_unavailable"]}
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
@@ -99,9 +115,28 @@ def login(
     enabled, secret = get_2fa_info(user.id)
 
     # If 2FA is enabled AND policy says challenge → go to 2FA step
-    if enabled and secret and should_challenge(request, user.id):
-        request.session["pending_2fa_user_id"] = user.id
-        return RedirectResponse(url="/2fa", status_code=303)
+    risk = call_risk_engine(context_features)
+    decision = risk.get("decision", "allow")
+    print(f"[risk] decision={decision} score={risk.get('score')} reasons={risk.get('reasons')}", flush=True)
+
+    if decision == "block":
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Login blocked due to suspicious activity. Try again later."}
+        )
+
+    # If risk says challenge, send them through your existing 2FA step (only if user has 2FA enabled)
+    if decision == "challenge":
+        if enabled and secret:
+            request.session["pending_2fa_user_id"] = user.id
+            return RedirectResponse(url="/2fa", status_code=303)
+        else:
+            # MVP behavior if user doesn't have 2FA enabled:
+            # either force setup or just deny (choose one; deny is simpler/safer)
+            return templates.TemplateResponse(
+                "login.html",
+                {"request": request, "error": "Additional verification required, but 2FA is not enabled for this account."}
+            )
 
     # Otherwise: login completes immediately (ALLOW)
     request.session["username"] = user.username

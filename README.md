@@ -4,7 +4,7 @@ to start risk engine API in root folder
 
 ```
 
-uvicorn risk_engine.api:app --reload --port 8001
+uvicorn risk_engine.api:app --reload --port 8003
 
 ```
 to see api opened use localhost/docs
@@ -17,7 +17,7 @@ inside webapp/webapp
 uvicorn app.main:app --reload --port 8080
 
 start with PC ip
- uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 
 ```
@@ -36,7 +36,7 @@ every request from web need to tag along API key to secure the RBA API
 
 ## Cookie API 
 
-```commandline
+```route
 /cookie/generate
 ```
 This endpoint is called server-to-server by the web application after a successful login. It returns either:
@@ -64,3 +64,27 @@ return
 }
 ```
 
+
+
+## Cookie Name
+**app_device_id**
+
+Web-application–issued, opaque device identifier used for login continuity and risk context across sessions.
+
+**__Host_rba_dt**
+
+Risk-engine–issued trusted device token used to recognize previously verified devices after successful authentication.
+
+```
+HttpOnly – prevents JavaScript access (XSS protection)
+
+Secure – sent only over HTTPS (production)
+
+SameSite=Lax – mitigates CSRF while allowing normal navigation
+
+Path=/ – available across the entire application
+
+Domain not set – host-only to prevent subdomain injection
+
+Max-Age – max age of cookie
+```

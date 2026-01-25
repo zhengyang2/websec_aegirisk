@@ -9,6 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import pyotp
 import qrcode
+from datetime import datetime, timezone
 
 from .db import init_db, get_conn
 from .auth import (
@@ -22,6 +23,8 @@ from .auth import (
 )
 
 from .context_extract import request_context_extract
+from .cookie_setter import generate_device_id, set_cookie, delete_cookie, CookieProfile
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -67,12 +70,95 @@ def call_risk_engine(context_features: dict) -> dict:
         print(f"[risk] engine call failed, fail-open allow. err={e}", flush=True)
         return {"decision": "allow", "score": 0, "reasons": ["risk_engine_unavailable"]}
 
+def check_cookie_action(request, user):
+    # If not logged in, do nothing (no engine token issuance)
+    if user is None:
+        return None, None
+
+    device_token = request.cookies.get("__Host_rba_dt")
+    device_id = request.cookies.get("app_device_id")
+
+    new_device_id = None
+    new_risk_token = None
+
+    # 1) Ensure app_device_id exists (only set if missing)
+    if device_id is None:
+        new_device_id = generate_device_id()
+        device_id = new_device_id  # use it for the engine call
+
+
+
+    # 3) Call risk engine to mint trusted device token
+    payload = {
+        "user_id": user,
+        "device_id": device_id,
+        "force_rotate": False,
+    }
+
+    headers = {}
+    if RISK_ENGINE_API_KEY:
+        headers["X-API-Key"] = RISK_ENGINE_API_KEY
+
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.post(f"{RISK_ENGINE_URL}/cookie/generate", json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+
+    except Exception as e:
+        print(f"[risk_cookie] engine call failed err={e}", flush=True)
+        # still allow setting new_device_id if we generated it
+        return new_device_id, None
+
+    return new_device_id, data
+
+def parse_utc_expires(ts: str) -> datetime:
+    """
+    Parse ISO 8601 UTC timestamp from risk engine.
+    """
+    dt = datetime.fromisoformat(ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return templates.TemplateResponse(
+
+    device_id, token_data = check_cookie_action(request, current_user(request))
+    response = templates.TemplateResponse(
         "home.html",
         {"request": request, "username": current_user(request)},
     )
+
+    if device_id:
+        set_cookie(
+            response,
+            name="app_device_id",
+            value=device_id,
+            kind=CookieProfile.APP_DEVICE_ID,
+            is_prod=False,
+        )
+        print("device id cookie set:", device_id)
+
+    if token_data and token_data.get("case") != "no_rotate":
+        expires_at = token_data.get("expires_at_utc")
+        expires_dt = parse_utc_expires(expires_at)
+
+        set_cookie(
+            response,
+            name=token_data.get("cookie_name"),
+            value=token_data.get("raw_token"),
+            kind=CookieProfile.RISK_ENGINE_TOKEN,
+            is_prod=False,
+            expires=expires_dt,
+            max_age=None,
+        )
+        print("device token cookie set:", token_data.get("raw_token"))
+
+
+    return response
 
 @app.get("/register", response_class=HTMLResponse)
 def register_form(request: Request):

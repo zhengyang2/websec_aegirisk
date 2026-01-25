@@ -104,14 +104,14 @@ def check_cookie_action(request, user):
             resp = client.post(f"{RISK_ENGINE_URL}/cookie/generate", json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-            print(data)
-            new_risk_token = data.get("raw_token")
+
+
     except Exception as e:
         print(f"[risk_cookie] engine call failed err={e}", flush=True)
         # still allow setting new_device_id if we generated it
         return new_device_id, None
 
-    return new_device_id, new_risk_token
+    return new_device_id, data
 
 def parse_utc_expires(ts: str) -> datetime:
     """
@@ -126,7 +126,7 @@ def parse_utc_expires(ts: str) -> datetime:
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
 
-    device_id, device_token = check_cookie_action(request, current_user(request))
+    device_id, token_data = check_cookie_action(request, current_user(request))
     response = templates.TemplateResponse(
         "home.html",
         {"request": request, "username": current_user(request)},
@@ -142,16 +142,20 @@ def home(request: Request):
         )
         print("device id cookie set:", device_id)
 
-    if device_token:
+    if token_data and token_data.get("case") != "no_rotate":
+        expires_at = token_data.get("expires_at_utc")
+        expires_dt = parse_utc_expires(expires_at)
+
         set_cookie(
             response,
-            name="__Host_rba_dt",
-            value=device_token,
+            name=token_data.get("cookie_name"),
+            value=token_data.get("raw_token"),
             kind=CookieProfile.RISK_ENGINE_TOKEN,
             is_prod=False,
+            expires=expires_dt,
+            max_age=None,
         )
-        print("device token cookie set:", device_token)
-
+        print("device token cookie set:", token_data.get("raw_token"))
 
 
     return response

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Literal
-
+from datetime import datetime
 import secrets
 import string
 
@@ -73,7 +73,7 @@ def set_cookie(
     kind: CookieProfile,
     is_prod: bool,
     max_age: Optional[int] = None,
-    expires: Optional[int] = None,
+    expires: Optional[datetime] = None,
 ) -> None:
     """
     Set a cookie using standardized security rules.

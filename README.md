@@ -4,7 +4,7 @@ to start risk engine API in root folder
 
 ```
 
-uvicorn risk_engine.api:app --reload --port 8001
+uvicorn risk_engine.api:app --reload --port 8003
 
 ```
 to see api opened use localhost/docs
@@ -17,7 +17,7 @@ inside webapp/webapp
 uvicorn app.main:app --reload --port 8080
 
 start with PC ip
- uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 
 ```

@@ -22,6 +22,8 @@ from .auth import (
 )
 
 from .context_extract import request_context_extract
+from .cookie_setter import generate_device_id, set_cookie, delete_cookie
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

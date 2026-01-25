@@ -36,7 +36,7 @@ every request from web need to tag along API key to secure the RBA API
 
 ## Cookie API 
 
-```commandline
+```route
 /cookie/generate
 ```
 This endpoint is called server-to-server by the web application after a successful login. It returns either:
@@ -64,3 +64,27 @@ return
 }
 ```
 
+
+
+## Cookie Name
+**app_device_id**
+
+Web-application–issued, opaque device identifier used for login continuity and risk context across sessions.
+
+**__Host_rba_dt**
+
+Risk-engine–issued trusted device token used to recognize previously verified devices after successful authentication.
+
+```
+HttpOnly – prevents JavaScript access (XSS protection)
+
+Secure – sent only over HTTPS (production)
+
+SameSite=Lax – mitigates CSRF while allowing normal navigation
+
+Path=/ – available across the entire application
+
+Domain not set – host-only to prevent subdomain injection
+
+Max-Age – max age of cookie
+```

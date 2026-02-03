@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AegiRisk – Admin Dashboard</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+<h2>AegiRisk – Risk Engine Dashboard</h2>
+
+<div class="charts">
+  <canvas id="decisionChart"></canvas>
+  <canvas id="reasonChart"></canvas>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>User</th>
+      <th>Time (UTC)</th>
+      <th>IP</th>
+      <th>Device</th>
+      <th>Score</th>
+      <th>Decision</th>
+      <th>Reasons</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in events %}
+    <tr class="{{ e.decision }}">
+      <td>{{ e.username }}</td>
+      <td>{{ e.event_time_utc }}</td>
+      <td>{{ e.ip_prefix or "-" }}</td>
+      <td>{{ e.device_token[:8] if e.device_token else "-" }}</td>
+      <td>{{ e.score }}</td>
+      <td>{{ e.decision }}</td>
+      <td>{{ e.reasons }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script id="events-data" type="application/json">
+  {{ events | tojson | safe }};
+</script>
+
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

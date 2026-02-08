@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 
 ENV_PATH = Path("risk_engine/.env")
 
-ENGINE_STATE_PATH = Path("risk_engine/engine_state.json")
+
+BASE_DIR = Path(__file__).resolve().parent
+ENGINE_STATE_PATH = BASE_DIR / "engine_state.json"
 
 load_dotenv(dotenv_path=ENV_PATH)
 

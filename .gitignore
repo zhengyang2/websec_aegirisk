@@ -26,6 +26,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+risk_engine/engine_state.json
+
 .idea
 
 # PyInstaller

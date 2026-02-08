@@ -17,7 +17,7 @@ from risk_engine.routes.dashboard_route import dashboard_router
 
 from risk_engine.config import ENV_PATH
 #component import
-import config
+from risk_engine import config
 
 
 app = FastAPI(title="RBA Risk Engine")

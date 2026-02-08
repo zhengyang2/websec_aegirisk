@@ -2,8 +2,14 @@ from pathlib import Path
 import os
 import json
 
-ENV_PATH = Path(".env")
-ENGINE_STATE_PATH = Path("engine_state.json")
+from dotenv import load_dotenv
+
+
+ENV_PATH = Path("risk_engine/.env")
+
+ENGINE_STATE_PATH = Path("risk_engine/engine_state.json")
+
+load_dotenv(dotenv_path=ENV_PATH)
 
 def load_state() -> dict | None:
     if not ENGINE_STATE_PATH.exists():

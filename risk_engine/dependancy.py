@@ -20,7 +20,9 @@ def get_db():
 # used to secure RBA API. verify when API called is it the web app
 
 def require_api_key(x_api_key: str | None  = Header(default=None)):
-    if config.ENFORCE_API_KEY == 1:
+
+    if config.ENFORCE_API_KEY:
+
 
         expected = config.get_engine_api_key()
 

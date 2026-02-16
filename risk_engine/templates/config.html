@@ -14,8 +14,10 @@
       <p class="subtitle">Tune your risk signals and thresholds. Start small, monitor outcomes, then iterate.</p>
     </div>
     <div class="controls">
+      <a href="/admin/audit-logs" class="btn">Audit Logs</a>
       <a href="/admin/dashboard" class="btn">Back to Dashboard</a>
       <form action="/admin/logout" method="post" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn btn-ghost" type="submit">Logout</button>
       </form>
     </div>
@@ -129,12 +131,16 @@
 </div>
 
 <script>
+  const CSRF_TOKEN = "{{ csrf_token }}";
   let currentConfig = null;
 
   async function loadConfig() {
     try {
       const response = await fetch('/admin/config/read', {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': CSRF_TOKEN
+        }
       });
       
       if (!response.ok) {
@@ -284,7 +290,8 @@
       const response = await fetch('/admin/config', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': CSRF_TOKEN
         },
         body: JSON.stringify(config)
       });

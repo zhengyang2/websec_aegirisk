@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Audit Logs - Risk Engine</title>
+  <link rel="stylesheet" href="/static/dashboard.css?v=4">
+</head>
+
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">AegiRisk Admin</p>
+      <h1>Audit Logs</h1>
+      <p class="subtitle">Security audit trail of all admin actions.</p>
+    </div>
+    <div class="controls">
+      <a href="/admin/dashboard" class="btn">Back to Dashboard</a>
+      <a href="/admin/config-page" class="btn btn-primary">Configure Risk Scoring</a>
+      <form action="/admin/logout" method="post" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-ghost" type="submit">Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <section class="dashboard-section">
+    <h3 class="section-title">Recent Admin Activity</h3>
+    
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp (UTC)</th>
+            <th>Action</th>
+            <th>Resource</th>
+            <th>Status</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.timestamp }}</td>
+            <td><strong>{{ log.action }}</strong></td>
+            <td>{{ log.resource or "-" }}</td>
+            <td>
+              <span class="badge badge-{% if log.status == 'success' %}allow{% elif log.status == 'failure' %}challenge{% else %}block{% endif %}">
+                {{ log.status }}
+              </span>
+            </td>
+            <td class="reasons-cell">
+              {% if log.error_message %}
+                <strong style="color: #c73e1d;">Error:</strong> {{ log.error_message }}
+              {% elif log.details %}
+                {% set details_obj = log.details | safe %}
+                {% if 'changes' in details_obj %}
+                  <details>
+                    <summary style="cursor: pointer; font-weight: 500;">View Changes</summary>
+                    <pre style="margin-top: 8px; padding: 8px; background: #f4f1ea; border-radius: 4px; font-size: 12px; overflow-x: auto;">{{ log.details | safe }}</pre>
+                  </details>
+                {% else %}
+                  <pre style="font-size: 12px; margin: 0;">{{ log.details | safe }}</pre>
+                {% endif %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+</body>
+</html>

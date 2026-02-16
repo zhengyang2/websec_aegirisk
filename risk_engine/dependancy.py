@@ -5,7 +5,7 @@ import os
 import time
 
 from fastapi import Header, HTTPException, Request, status
-from risk_engine.db.db_setup import SessionLocal
+from risk_engine.db.db_setup import SessionLocal, AuditSessionLocal
 from risk_engine import config
 # use to check when web app call that it is secure
 
@@ -14,6 +14,15 @@ from risk_engine import config
 
 def get_db():
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_audit_db():
+    """Get audit database session."""
+    db = AuditSessionLocal()
     try:
         yield db
     finally:

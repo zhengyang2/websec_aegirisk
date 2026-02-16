@@ -7,11 +7,12 @@ import os
 from pathlib import Path
 
 # db import
-from risk_engine.db.db_setup import Base, engine
+from risk_engine.db.db_setup import Base, engine, AuditBase, audit_engine
 
 # ensure models are registered with Base before create_all
 from risk_engine.db import cookie_model
 from risk_engine.db import risk_model
+from risk_engine.db import audit_model
 
 #routes imports
 from risk_engine.routes.cookie_route import cookie_router
@@ -28,8 +29,9 @@ app = FastAPI(title="RBA Risk Engine")
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me"),
-    https_only=False,
+    https_only=os.getenv("RISK_ENGINE_HTTPS_ONLY", "false").lower() == "true",
     max_age=int(os.getenv("RISK_ENGINE_ADMIN_SESSION_TIMEOUT_SEC", "900")),
+    same_site="strict",  # CSRF protection via cookie policy
 )
 
 # Mount static files for dashboard CSS/JS
@@ -44,6 +46,16 @@ app.include_router(dashboard_router)
 @app.on_event("startup")
 def init_db():
     Base.metadata.create_all(bind=engine)
+    AuditBase.metadata.create_all(bind=audit_engine)
+    
+    # Security warning for default secret in production
+    session_secret = os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me")
+    if session_secret == "dev-secret-change-me":
+        print("\n" + "="*70)
+        print("⚠️  WARNING: Using default session secret!")
+        print("⚠️  Set RISK_ENGINE_SESSION_SECRET environment variable")
+        print("⚠️  Generate a strong secret with: python -c 'import secrets; print(secrets.token_urlsafe(32))'")
+        print("="*70 + "\n")
 
 @app.get("/")
 def read_root():

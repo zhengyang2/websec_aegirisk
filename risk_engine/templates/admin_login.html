@@ -195,6 +195,7 @@
             {% endif %}
 
             <form class="login-form" method="post" action="/admin/login">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-group">
                     <label for="api_key">API Key</label>
                     <input 

@@ -14,8 +14,10 @@
       <p class="subtitle">Monitor login events and risk decisions in real-time.</p>
     </div>
     <div class="controls">
+      <a href="/admin/audit-logs" class="btn">Audit Logs</a>
       <a href="/admin/config-page" class="btn btn-primary">Configure Risk Scoring</a>
       <form action="/admin/logout" method="post" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn btn-ghost" type="submit">Logout</button>
       </form>
     </div>

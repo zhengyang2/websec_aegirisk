@@ -9,9 +9,23 @@ import os
 import time
 from datetime import datetime
 
+import hmac
 from risk_engine.db.risk_model import LoginEvent
-from risk_engine.dependancy import get_db, require_admin, _is_api_key_valid, is_admin_session_active
+from risk_engine.dependancy import get_db, get_audit_db, require_admin, _is_api_key_valid, is_admin_session_active
 from risk_engine.component.risk_utils import load_risk_config, reload_risk_config
+from risk_engine.component.csrf_utils import get_csrf_token, verify_csrf_token
+from risk_engine.component.audit_utils import log_login_attempt, log_logout, log_config_change
+from risk_engine.component.validation_utils import (
+    validate_api_key,
+    validate_risk_score,
+    validate_threshold,
+    validate_speed,
+    validate_distance,
+    validate_time_window,
+    validate_percentage,
+    validate_positive_integer,
+    validate_hour_list
+)
 from risk_engine import config
 
 dashboard_router = APIRouter(
@@ -86,49 +100,91 @@ def admin_root():
 def admin_login_form(request: Request):
     key = _client_key(request)
     remaining = _lockout_remaining(key)
+    csrf_token = get_csrf_token(request)
     if remaining > 0:
         return templates.TemplateResponse(
             "admin_login.html",
-            {"request": request, "error": f"Too many attempts. Try again in {remaining} seconds."},
+            {"request": request, "error": f"Too many attempts. Try again in {remaining} seconds.", "csrf_token": csrf_token},
             status_code=429,
         )
     return templates.TemplateResponse(
         "admin_login.html",
-        {"request": request, "error": None},
+        {"request": request, "error": None, "csrf_token": csrf_token},
     )
 
 
 @dashboard_router.post("/login")
-def admin_login(request: Request, api_key: str = Form(...)):
+def admin_login(request: Request, api_key: str = Form(...), csrf_token: str = Form(...), db: Session = Depends(get_db)):
     key = _client_key(request)
-    remaining = _lockout_remaining(key)
-    if remaining > 0:
+    csrf_session_token = get_csrf_token(request)
+    
+    # Verify CSRF token
+    try:
+        verify_csrf_token(request, csrf_token)
+    except HTTPException:
+        log_login_attempt(request, success=False, reason="Invalid CSRF token")
         return templates.TemplateResponse(
             "admin_login.html",
-            {"request": request, "error": f"Too many attempts. Try again in {remaining} seconds."},
+            {"request": request, "error": "Invalid security token. Please try again.", "csrf_token": csrf_session_token},
+            status_code=403,
+        )
+    
+    remaining = _lockout_remaining(key)
+    if remaining > 0:
+        log_login_attempt(request, success=False, reason=f"Rate limited ({remaining}s remaining)")
+        return templates.TemplateResponse(
+            "admin_login.html",
+            {"request": request, "error": f"Too many attempts. Try again in {remaining} seconds.", "csrf_token": csrf_session_token},
             status_code=429,
+        )
+
+    # Validate API key format
+    try:
+        validate_api_key(api_key)
+    except HTTPException:
+        _record_login_failure(key)
+        log_login_attempt(request, success=False, reason="Invalid API key format")
+        return templates.TemplateResponse(
+            "admin_login.html",
+            {"request": request, "error": "Invalid credentials.", "csrf_token": csrf_session_token},
+            status_code=401,
         )
 
     # use engine key, not risk config
     from risk_engine import config
     expected_key = config.get_engine_api_key()
 
-    if not expected_key or api_key != expected_key:
+    if not expected_key or not hmac.compare_digest(api_key.strip(), expected_key):
         _record_login_failure(key)
+        log_login_attempt(request, success=False, reason="Invalid credentials")
         return templates.TemplateResponse(
             "admin_login.html",
-            {"request": request, "error": "Invalid API key."},
+            {"request": request, "error": "Invalid credentials.", "csrf_token": csrf_session_token},
             status_code=401,
         )
 
+    # Regenerate session to prevent session fixation attacks
+    old_csrf = request.session.get("csrf_token")
+    request.session.clear()
+    if old_csrf:
+        request.session["csrf_token"] = old_csrf  # Preserve CSRF token
+    
     request.session["admin_auth"] = True
     request.session["admin_last_seen"] = int(time.time())
     _clear_login_failures(key)
+    log_login_attempt(request, success=True)
     return RedirectResponse(url="/admin/dashboard", status_code=303)
 
 
 @dashboard_router.post("/logout")
-def admin_logout(request: Request):
+def admin_logout(request: Request, csrf_token: str = Form(...)):
+    # Verify CSRF token
+    try:
+        verify_csrf_token(request, csrf_token)
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    
+    log_logout(request)
     request.session.pop("admin_auth", None)
     request.session.pop("admin_last_seen", None)
     return RedirectResponse(url="/admin/login", status_code=303)
@@ -184,7 +240,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "events": events,
             "show_config_warning": show_config_warning,
-            "config_change_date": config_change_date
+            "config_change_date": config_change_date,
+            "csrf_token": get_csrf_token(request)
         }
     )
 
@@ -198,6 +255,7 @@ def config_page(request: Request, db: Session = Depends(get_db)):
         "config.html",
         {
             "request": request,
+            "csrf_token": get_csrf_token(request)
         }
     )
 
@@ -206,6 +264,7 @@ class RiskConfigUpdate(BaseModel):
     risk_scores: Dict[str, int]
     decision_thresholds: Dict[str, int]
     impossible_travel: Dict[str, float]
+    rate_limit: Dict[str, Any]
     baseline: Dict[str, Any]
 
 
@@ -218,17 +277,125 @@ def get_risk_config_redirect(request: Request, db: Session = Depends(get_db)):
 
 
 @dashboard_router.post("/config/read")
-def get_risk_config(db: Session = Depends(get_db), _=Depends(require_admin)):
+def get_risk_config(request: Request, db: Session = Depends(get_db), _=Depends(require_admin)):
     """Get current risk scoring configuration (session-required)."""
+    # Verify CSRF token from header
+    csrf_token = request.headers.get("X-CSRF-Token")
+    try:
+        verify_csrf_token(request, csrf_token)
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    
     config = load_risk_config()
     return JSONResponse(content=config)
 
 
 @dashboard_router.post("/config")
-def update_risk_config(config_update: RiskConfigUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
+def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
     """Update risk scoring configuration."""
+    # Verify CSRF token from header
+    csrf_token = request.headers.get("X-CSRF-Token")
     try:
+        verify_csrf_token(request, csrf_token)
+    except HTTPException as e:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    
+    try:
+        # Validate all config values
+        for key, value in config_update.risk_scores.items():
+            validate_risk_score(value, f"risk_scores.{key}")
+        
+        for key, value in config_update.decision_thresholds.items():
+            validate_threshold(value, f"decision_thresholds.{key}")
+        
+        # Validate impossible travel config
+        if "speed_threshold_kmh" in config_update.impossible_travel:
+            validate_speed(
+                config_update.impossible_travel["speed_threshold_kmh"],
+                "impossible_travel.speed_threshold_kmh"
+            )
+        if "time_window_hours" in config_update.impossible_travel:
+            validate_time_window(
+                config_update.impossible_travel["time_window_hours"],
+                "impossible_travel.time_window_hours"
+            )
+        if "minimum_distance_km" in config_update.impossible_travel:
+            validate_distance(
+                config_update.impossible_travel["minimum_distance_km"],
+                "impossible_travel.minimum_distance_km"
+            )
+        
+        # Validate rate_limit config
+        if "window_seconds" in config_update.rate_limit:
+            validate_positive_integer(
+                config_update.rate_limit["window_seconds"],
+                "rate_limit.window_seconds",
+                min_val=1,
+                max_val=3600
+            )
+        if "thresholds" in config_update.rate_limit:
+            thresholds = config_update.rate_limit["thresholds"]
+            if not isinstance(thresholds, list):
+                raise HTTPException(
+                    status_code=400,
+                    detail="rate_limit.thresholds must be a list"
+                )
+            for idx, threshold in enumerate(thresholds):
+                if not isinstance(threshold, dict):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"rate_limit.thresholds[{idx}] must be an object"
+                    )
+                if "attempts" in threshold:
+                    validate_positive_integer(
+                        threshold["attempts"],
+                        f"rate_limit.thresholds[{idx}].attempts",
+                        min_val=1,
+                        max_val=1000
+                    )
+                if "score" in threshold:
+                    validate_risk_score(
+                        threshold["score"],
+                        f"rate_limit.thresholds[{idx}].score"
+                    )
+        
+        # Validate baseline config
+        if "typical_hours_minimum_events" in config_update.baseline:
+            validate_positive_integer(
+                config_update.baseline["typical_hours_minimum_events"],
+                "baseline.typical_hours_minimum_events",
+                min_val=1,
+                max_val=1000
+            )
+        if "typical_hours_percentage_threshold" in config_update.baseline:
+            validate_percentage(
+                config_update.baseline["typical_hours_percentage_threshold"],
+                "baseline.typical_hours_percentage_threshold"
+            )
+        if "typical_hours_default" in config_update.baseline:
+            validate_hour_list(
+                config_update.baseline["typical_hours_default"],
+                "baseline.typical_hours_default"
+            )
+        if "recalculation_frequency" in config_update.baseline:
+            validate_positive_integer(
+                config_update.baseline["recalculation_frequency"],
+                "baseline.recalculation_frequency",
+                min_val=1,
+                max_val=1000
+            )
+        if "event_limit" in config_update.baseline:
+            validate_positive_integer(
+                config_update.baseline["event_limit"],
+                "baseline.event_limit",
+                min_val=10,
+                max_val=10000
+            )
+        
         config_path = os.path.join(os.path.dirname(__file__), '..', 'risk_config.json')
+        
+        # Load old config for audit trail
+        old_config = load_risk_config()
         
         # Convert Pydantic model to dict
         new_config = config_update.model_dump()
@@ -249,10 +416,59 @@ def update_risk_config(config_update: RiskConfigUpdate, db: Session = Depends(ge
         # Reload config cache
         reload_risk_config()
         
+        # Log the config change
+        log_config_change(request, old_config, new_config, success=True)
+        
         return JSONResponse(content={
             "status": "success",
             "message": "Risk configuration updated successfully",
             "config": new_config
         })
     except Exception as e:
+        # Log the failure
+        try:
+            old_config = load_risk_config()
+            new_config = config_update.model_dump()
+            log_config_change(request, old_config, new_config, success=False, error_message=str(e))
+        except:
+            pass  # Don't let audit logging break error handling
         raise HTTPException(status_code=500, detail=f"Failed to update configuration: {str(e)}")
+
+
+@dashboard_router.get("/audit-logs")
+def audit_logs_page(request: Request, audit_db: Session = Depends(get_audit_db)):
+    """View audit logs."""
+    if not _has_admin_access(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    
+    from risk_engine.db.audit_model import AuditLog
+    
+    # Get recent audit logs
+    logs = (
+        audit_db.query(AuditLog)
+        .order_by(AuditLog.timestamp.desc())
+        .limit(500)
+        .all()
+    )
+    
+    log_entries = [
+        {
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat(),
+            "action": log.action,
+            "resource": log.resource,
+            "status": log.status,
+            "details": log.details,
+            "error_message": log.error_message
+        }
+        for log in logs
+    ]
+    
+    return templates.TemplateResponse(
+        "audit_logs.html",
+        {
+            "request": request,
+            "logs": log_entries,
+            "csrf_token": get_csrf_token(request)
+        }
+    )

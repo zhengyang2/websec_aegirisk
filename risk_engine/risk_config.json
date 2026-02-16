@@ -1,0 +1,25 @@
+{
+  "risk_scores": {
+    "new_device": 30,
+    "new_ip_prefix": 20,
+    "impossible_travel": 40,
+    "unusual_login_time": 20,
+    "missing_user_agent": 5
+  },
+  "decision_thresholds": {
+    "block": 60,
+    "challenge": 30
+  },
+  "impossible_travel": {
+    "time_window_hours": 6.0,
+    "minimum_distance_km": 100.0,
+    "speed_threshold_kmh": 900.0
+  },
+  "baseline": {
+    "typical_hours_minimum_events": 10,
+    "typical_hours_percentage_threshold": 0.1,
+    "typical_hours_default": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+    "recalculation_frequency": 10,
+    "event_limit": 50
+  }
+}

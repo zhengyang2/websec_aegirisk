@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 import secrets
 import os
 from pathlib import Path
@@ -21,6 +24,17 @@ from risk_engine import config
 
 
 app = FastAPI(title="RBA Risk Engine")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me"),
+    https_only=False,
+    max_age=int(os.getenv("RISK_ENGINE_ADMIN_SESSION_TIMEOUT_SEC", "900")),
+)
+
+# Mount static files for dashboard CSS/JS
+app.mount("/static", StaticFiles(directory="risk_engine/static"), name="static")
+
 app.include_router(cookie_router)
 app.include_router(risk_router)
 app.include_router(dashboard_router)
@@ -33,8 +47,7 @@ def init_db():
 
 @app.get("/")
 def read_root():
-
-    return {"Hello": "World"}
+    return RedirectResponse(url="/admin/login", status_code=302)
 
 
 

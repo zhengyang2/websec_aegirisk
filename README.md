@@ -88,3 +88,6 @@ Domain not set – host-only to prevent subdomain injection
 
 Max-Age – max age of cookie
 ```
+
+## accessing dashboard
+visit http://127.0.0.1:8003 and enter api key

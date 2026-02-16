@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RBA Login</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+
+<body>
+<h2>RBA Access</h2>
+
+<form method="post" action="/admin/login" class="config-container">
+  <label>API Key:
+    <input type="password" name="api_key" autocomplete="current-password" required>
+  </label>
+
+  <div class="config-actions">
+    <button type="submit" class="btn btn-primary">Login</button>
+  </div>
+
+  {% if error %}
+  <div class="message error">{{ error }}</div>
+  {% endif %}
+</form>
+</body>
+</html>

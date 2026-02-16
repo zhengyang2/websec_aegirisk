@@ -9,6 +9,13 @@
 <body>
 <h2>AegiRisk – Risk Engine Dashboard</h2>
 
+<div class="controls">
+  <a href="/admin/config-page" class="btn">⚙️ Configure Risk Scoring</a>
+  <form action="/admin/logout" method="post" style="display:inline;">
+    <button class="btn" type="submit">Logout</button>
+  </form>
+</div>
+
 <div class="charts">
   <canvas id="decisionChart"></canvas>
   <canvas id="reasonChart"></canvas>
@@ -41,8 +48,9 @@
   </tbody>
 </table>
 
-<script id="events-data" type="application/json">
-  {{ events | tojson | safe }};
+<script>
+  // Use JSON.parse to avoid editor false-positives on template syntax.
+  const EVENTS = JSON.parse('{{ events | tojson | safe }}');
 </script>
 
 <script src="/static/dashboard.js"></script>

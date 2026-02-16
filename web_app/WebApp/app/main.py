@@ -51,6 +51,9 @@ def make_qr_data_uri(text: str) -> str:
 RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
 RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
 
+if not RISK_ENGINE_API_KEY:
+    print("[risk] warning: RISK_ENGINE_API_KEY is not set; risk engine calls may return 401", flush=True)
+
 def call_risk_engine(context_features: dict) -> dict:
     """
     Calls risk engine /risk/evaluate and returns:

@@ -29,6 +29,9 @@ pydantic-extra-types==2.11.0
 pydantic-settings==2.12.0
 pydantic_core==2.41.5
 
+# IP Geolocation for impossible travel detection
+geoip2==4.8.1
+
 # FastAPI internals / async stack
 anyio==4.12.1
 h11==0.16.0

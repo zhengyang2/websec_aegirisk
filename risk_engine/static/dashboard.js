@@ -1,3 +1,6 @@
+// Wait for DOM to be fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+
 const decisionCounts = {};
 const reasonCounts = {};
 const scores = [];
@@ -30,3 +33,5 @@ new Chart(document.getElementById("reasonChart"), {
     datasets: [{ data: Object.values(reasonCounts) }]
   }
 });
+
+}); // End of DOMContentLoaded

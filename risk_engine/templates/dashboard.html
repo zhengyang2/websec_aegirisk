@@ -2,57 +2,151 @@
 <html>
 <head>
   <title>AegiRisk – Admin Dashboard</title>
-  <link rel="stylesheet" href="/static/dashboard.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/static/dashboard.css?v=4">
 </head>
 
 <body>
-<h2>AegiRisk – Risk Engine Dashboard</h2>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">AegiRisk Admin</p>
+      <h1>Risk Engine Dashboard</h1>
+      <p class="subtitle">Monitor login events and risk decisions in real-time.</p>
+    </div>
+    <div class="controls">
+      <a href="/admin/config-page" class="btn btn-primary">Configure Risk Scoring</a>
+      <form action="/admin/logout" method="post" style="display:inline;">
+        <button class="btn btn-ghost" type="submit">Logout</button>
+      </form>
+    </div>
+  </header>
 
-<div class="controls">
-  <a href="/admin/config-page" class="btn">⚙️ Configure Risk Scoring</a>
-  <form action="/admin/logout" method="post" style="display:inline;">
-    <button class="btn" type="submit">Logout</button>
-  </form>
+  {% if show_config_warning %}
+  <div class="config-warning-banner">
+    <div class="warning-icon">⚠️</div>
+    <div class="warning-content">
+      <strong>Configuration Changed</strong>
+      <p>Risk scores were reconfigured on {{ config_change_date }}. Some events shown may use different scoring thresholds.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="dashboard-section">
+    <h3 class="section-title">Recent Login Events</h3>
+    
+    <div class="filter-container">
+      <div class="filter-group">
+        <input type="text" id="filterUsername" placeholder="Search username..." class="filter-input">
+      </div>
+      <div class="filter-group">
+        <select id="filterDecision" class="filter-select">
+          <option value="">All Decisions</option>
+          <option value="allow">Allow</option>
+          <option value="challenge">Challenge</option>
+          <option value="block">Block</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <input type="number" id="filterMinScore" placeholder="Min score" class="filter-input filter-input-small">
+        <span class="filter-separator">–</span>
+        <input type="number" id="filterMaxScore" placeholder="Max score" class="filter-input filter-input-small">
+      </div>
+      <div class="filter-group">
+        <button id="clearFilters" class="btn btn-secondary btn-small">Clear Filters</button>
+      </div>
+    </div>
+    
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Time (UTC)</th>
+            <th>IP</th>
+            <th>Device</th>
+            <th>Score</th>
+            <th>Decision</th>
+            <th>Reasons</th>
+          </tr>
+        </thead>
+        <tbody id="eventsTableBody">
+          {% for e in events %}
+          <tr class="{{ e.decision }}" data-username="{{ e.username }}" data-decision="{{ e.decision }}" data-score="{{ e.score }}">
+            <td>{{ e.username }}</td>
+            <td>{{ e.event_time_utc }}</td>
+            <td>{{ e.ip_prefix or "-" }}</td>
+            <td>{{ e.device_token[:8] if e.device_token else "-" }}</td>
+            <td><strong>{{ e.score }}</strong></td>
+            <td><span class="badge badge-{{ e.decision }}">{{ e.decision }}</span></td>
+            <td class="reasons-cell">{{ e.reasons }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>
-
-<div class="charts">
-  <canvas id="decisionChart"></canvas>
-  <canvas id="reasonChart"></canvas>
-</div>
-
-<table>
-  <thead>
-    <tr>
-      <th>User</th>
-      <th>Time (UTC)</th>
-      <th>IP</th>
-      <th>Device</th>
-      <th>Score</th>
-      <th>Decision</th>
-      <th>Reasons</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for e in events %}
-    <tr class="{{ e.decision }}">
-      <td>{{ e.username }}</td>
-      <td>{{ e.event_time_utc }}</td>
-      <td>{{ e.ip_prefix or "-" }}</td>
-      <td>{{ e.device_token[:8] if e.device_token else "-" }}</td>
-      <td>{{ e.score }}</td>
-      <td>{{ e.decision }}</td>
-      <td>{{ e.reasons }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 
 <script>
   // Use JSON.parse to avoid editor false-positives on template syntax.
   const EVENTS = JSON.parse('{{ events | tojson | safe }}');
+
+  // Filter functionality
+  function applyFilters() {
+    const usernameFilter = document.getElementById('filterUsername').value.toLowerCase();
+    const decisionFilter = document.getElementById('filterDecision').value.toLowerCase();
+    const minScore = document.getElementById('filterMinScore').value;
+    const maxScore = document.getElementById('filterMaxScore').value;
+
+    const rows = document.querySelectorAll('#eventsTableBody tr');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const username = row.getAttribute('data-username').toLowerCase();
+      const decision = row.getAttribute('data-decision').toLowerCase();
+      const score = parseInt(row.getAttribute('data-score'));
+
+      let show = true;
+
+      // Username filter
+      if (usernameFilter && !username.includes(usernameFilter)) {
+        show = false;
+      }
+
+      // Decision filter
+      if (decisionFilter && decision !== decisionFilter) {
+        show = false;
+      }
+
+      // Min score filter
+      if (minScore && score < parseInt(minScore)) {
+        show = false;
+      }
+
+      // Max score filter
+      if (maxScore && score > parseInt(maxScore)) {
+        show = false;
+      }
+
+      row.style.display = show ? '' : 'none';
+      if (show) visibleCount++;
+    });
+  }
+
+  // Attach event listeners
+  document.getElementById('filterUsername').addEventListener('input', applyFilters);
+  document.getElementById('filterDecision').addEventListener('change', applyFilters);
+  document.getElementById('filterMinScore').addEventListener('input', applyFilters);
+  document.getElementById('filterMaxScore').addEventListener('input', applyFilters);
+
+  document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterUsername').value = '';
+    document.getElementById('filterDecision').value = '';
+    document.getElementById('filterMinScore').value = '';
+    document.getElementById('filterMaxScore').value = '';
+    applyFilters();
+  });
 </script>
 
-<script src="/static/dashboard.js"></script>
 </body>
 </html>

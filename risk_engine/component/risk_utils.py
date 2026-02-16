@@ -29,7 +29,7 @@ def load_risk_config() -> Dict[str, Any]:
         "risk_scores": {
             "new_device": 30,
             "new_ip_prefix": 20,
-            "impossible_travel": 40,
+            "impossible_travel": 30,
             "unusual_login_time": 20,
             "missing_user_agent": 5
         },
@@ -41,6 +41,14 @@ def load_risk_config() -> Dict[str, Any]:
             "time_window_hours": 6,
             "minimum_distance_km": 100,
             "speed_threshold_kmh": 900
+        },
+        "rate_limit": {
+            "window_seconds": 30,
+            "thresholds": [
+                {"attempts": 5, "score": 15},
+                {"attempts": 10, "score": 30},
+                {"attempts": 20, "score": 60}
+            ]
         },
         "baseline": {
             "typical_hours_minimum_events": 10,
@@ -259,6 +267,31 @@ def score_login(db: Session, username: str, ip: Optional[str], user_agent: Optio
                         if speed_kmh > speed_threshold:
                             score += config["risk_scores"]["impossible_travel"]
                             reasons.append("impossible_travel")
+
+    # Check for rate limit within a short window
+    rate_cfg = config.get("rate_limit") or {}
+    rate_window = int(rate_cfg.get("window_seconds", 0) or 0)
+    thresholds = rate_cfg.get("thresholds", []) or []
+
+    if rate_window > 0 and thresholds:
+        window_start = datetime.utcnow() - timedelta(seconds=rate_window)
+        attempt_count = (
+            db.query(LoginEvent)
+            .filter(
+                LoginEvent.username == username,
+                LoginEvent.event_time_utc >= window_start,
+            )
+            .count()
+        )
+
+        matched = None
+        for rule in sorted(thresholds, key=lambda r: r.get("attempts", 0)):
+            if attempt_count >= int(rule.get("attempts", 0) or 0):
+                matched = rule
+
+        if matched:
+            score += int(matched.get("score", 0) or 0)
+            reasons.append(f"rate_limit_ge_{matched.get('attempts', 0)}")
 
     # Check for unusual login time
     current_hour = datetime.utcnow().hour

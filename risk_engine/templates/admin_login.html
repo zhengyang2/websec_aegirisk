@@ -1,25 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>RBA Login</title>
-  <link rel="stylesheet" href="/static/dashboard.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Risk Engine</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+        :root {
+            --bg-1: #f4f1ea;
+            --bg-2: #f8efe3;
+            --ink-1: #1d1b16;
+            --ink-2: #4a4438;
+            --accent-1: #c46b39;
+            --accent-2: #2f6f5e;
+            --card: #ffffff;
+            --line: #e3dccf;
+            --shadow: 0 12px 30px rgba(26, 20, 12, 0.08);
+            --danger: #c73e1d;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            color: var(--ink-1);
+            background: radial-gradient(circle at 20% 20%, rgba(196, 107, 57, 0.12), transparent 45%),
+                        radial-gradient(circle at 80% 10%, rgba(47, 111, 94, 0.12), transparent 40%),
+                        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        h1, h2 {
+            font-family: "Fraunces", serif;
+            letter-spacing: 0.2px;
+            margin: 0;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            animation: fade-in 0.5s ease;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 48px 40px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-header h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: var(--ink-1);
+        }
+
+        .login-header p {
+            color: var(--ink-2);
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ink-1);
+        }
+
+        .form-group input[type="password"] {
+            padding: 14px 16px;
+            border: 2px solid var(--line);
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: "Space Grotesk", sans-serif;
+            transition: all 0.2s ease;
+            background: var(--bg-1);
+        }
+
+        .form-group input[type="password"]:focus {
+            outline: none;
+            border-color: var(--accent-1);
+            background: var(--card);
+            box-shadow: 0 0 0 3px rgba(196, 107, 57, 0.1);
+        }
+
+        .error-message {
+            padding: 12px 16px;
+            background: rgba(199, 62, 29, 0.08);
+            border: 1px solid rgba(199, 62, 29, 0.2);
+            border-radius: 10px;
+            color: var(--danger);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+
+        .error-message::before {
+            content: "⚠";
+            font-size: 16px;
+        }
+
+        .btn-submit {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: "Space Grotesk", sans-serif;
+            background: linear-gradient(135deg, var(--accent-1) 0%, #d47747 100%);
+            color: white;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(196, 107, 57, 0.25);
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(196, 107, 57, 0.35);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(196, 107, 57, 0.3);
+        }
+
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 32px 24px;
+            }
+
+            .login-header h1 {
+                font-size: 28px;
+            }
+        }
+    </style>
 </head>
-
 <body>
-<h2>RBA Access</h2>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>Risk Engine</h1>
+                <p>Admin Dashboard Access</p>
+            </div>
 
-<form method="post" action="/admin/login" class="config-container">
-  <label>API Key:
-    <input type="password" name="api_key" autocomplete="current-password" required>
-  </label>
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
 
-  <div class="config-actions">
-    <button type="submit" class="btn btn-primary">Login</button>
-  </div>
+            <form class="login-form" method="post" action="/admin/login">
+                <div class="form-group">
+                    <label for="api_key">API Key</label>
+                    <input 
+                        type="password" 
+                        id="api_key" 
+                        name="api_key" 
+                        required 
+                        autofocus
+                        autocomplete="off"
+                    >
+                </div>
 
-  {% if error %}
-  <div class="message error">{{ error }}</div>
-  {% endif %}
-</form>
+                <button type="submit" class="btn-submit">
+                    Access Dashboard
+                </button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

@@ -7,6 +7,7 @@ from typing import Dict, Any
 import json
 import os
 import time
+from datetime import datetime
 
 from risk_engine.db.risk_model import LoginEvent
 from risk_engine.dependancy import get_db, require_admin, _is_api_key_valid, is_admin_session_active
@@ -158,12 +159,32 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         }
         for e in raw_events
     ]
+    
+    # Check if viewing old data (before last config change)
+    show_config_warning = False
+    config_change_date = None
+    try:
+        state_path = os.path.join(os.path.dirname(__file__), '..', 'engine_state.json')
+        if os.path.exists(state_path):
+            with open(state_path, 'r') as f:
+                state = json.load(f)
+                last_config_change = state.get('last_config_change')
+                if last_config_change and raw_events:
+                    config_change_dt = datetime.fromisoformat(last_config_change)
+                    oldest_event = raw_events[-1]
+                    if oldest_event.event_time_utc < config_change_dt:
+                        show_config_warning = True
+                        config_change_date = config_change_dt.strftime('%Y-%m-%d %H:%M UTC')
+    except Exception:
+        pass
 
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "events": events,
+            "show_config_warning": show_config_warning,
+            "config_change_date": config_change_date
         }
     )
 
@@ -215,6 +236,15 @@ def update_risk_config(config_update: RiskConfigUpdate, db: Session = Depends(ge
         # Write to file
         with open(config_path, 'w') as f:
             json.dump(new_config, f, indent=2)
+        
+        # Record config change timestamp
+        state_path = os.path.join(os.path.dirname(__file__), '..', 'engine_state.json')
+        if os.path.exists(state_path):
+            with open(state_path, 'r') as f:
+                state = json.load(f)
+            state['last_config_change'] = datetime.utcnow().isoformat()
+            with open(state_path, 'w') as f:
+                json.dump(state, f, indent=2)
         
         # Reload config cache
         reload_risk_config()

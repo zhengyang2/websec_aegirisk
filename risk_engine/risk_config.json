@@ -2,7 +2,7 @@
   "risk_scores": {
     "new_device": 30,
     "new_ip_prefix": 20,
-    "impossible_travel": 40,
+    "impossible_travel": 30,
     "unusual_login_time": 20,
     "missing_user_agent": 5
   },
@@ -18,7 +18,18 @@
   "baseline": {
     "typical_hours_minimum_events": 10,
     "typical_hours_percentage_threshold": 0.1,
-    "typical_hours_default": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+    "typical_hours_default": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
     "recalculation_frequency": 10,
     "event_limit": 50
   }

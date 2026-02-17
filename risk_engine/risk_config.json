@@ -7,7 +7,7 @@
     "missing_user_agent": 5
   },
   "decision_thresholds": {
-    "block": 60,
+    "block": 80,
     "challenge": 30
   },
   "impossible_travel": {
@@ -20,34 +20,19 @@
     "thresholds": [
       {
         "attempts": 5,
-        "score": 15
+        "score": 20
       },
       {
         "attempts": 10,
-        "score": 30
-      },
-      {
-        "attempts": 20,
-        "score": 60
+        "score": 80
       }
     ]
   },
   "baseline": {
     "typical_hours_minimum_events": 10,
-    "typical_hours_percentage_threshold": 0.1,
-    "typical_hours_default": [
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18
-    ],
     "recalculation_frequency": 10,
-    "event_limit": 50
+    "event_limit": 50,
+    "typical_hours_start": 9,
+    "typical_hours_end": 19
   }
 }

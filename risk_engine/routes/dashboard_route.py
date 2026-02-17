@@ -24,6 +24,7 @@ from risk_engine.component.validation_utils import (
     validate_time_window,
     validate_percentage,
     validate_positive_integer,
+    validate_hour,
     validate_hour_list
 )
 from risk_engine import config
@@ -263,7 +264,6 @@ def config_page(request: Request, db: Session = Depends(get_db)):
 class RiskConfigUpdate(BaseModel):
     risk_scores: Dict[str, int]
     decision_thresholds: Dict[str, int]
-    impossible_travel: Dict[str, float]
     rate_limit: Dict[str, Any]
     baseline: Dict[str, Any]
 
@@ -307,23 +307,6 @@ def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Se
         
         for key, value in config_update.decision_thresholds.items():
             validate_threshold(value, f"decision_thresholds.{key}")
-        
-        # Validate impossible travel config
-        if "speed_threshold_kmh" in config_update.impossible_travel:
-            validate_speed(
-                config_update.impossible_travel["speed_threshold_kmh"],
-                "impossible_travel.speed_threshold_kmh"
-            )
-        if "time_window_hours" in config_update.impossible_travel:
-            validate_time_window(
-                config_update.impossible_travel["time_window_hours"],
-                "impossible_travel.time_window_hours"
-            )
-        if "minimum_distance_km" in config_update.impossible_travel:
-            validate_distance(
-                config_update.impossible_travel["minimum_distance_km"],
-                "impossible_travel.minimum_distance_km"
-            )
         
         # Validate rate_limit config
         if "window_seconds" in config_update.rate_limit:
@@ -391,6 +374,25 @@ def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Se
                 min_val=10,
                 max_val=10000
             )
+        if "typical_hours_start" in config_update.baseline:
+            validate_hour(
+                config_update.baseline["typical_hours_start"],
+                "baseline.typical_hours_start"
+            )
+        if "typical_hours_end" in config_update.baseline:
+            validate_hour(
+                config_update.baseline["typical_hours_end"],
+                "baseline.typical_hours_end"
+            )
+            # Validate that end hour can be >= start hour (handles wraparound case like 22-6)
+            if "typical_hours_start" in config_update.baseline:
+                start = config_update.baseline["typical_hours_start"]
+                end = config_update.baseline["typical_hours_end"]
+                if start == end:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Typical hours start and end cannot be the same (would match no hours)"
+                    )
         
         config_path = os.path.join(os.path.dirname(__file__), '..', 'risk_config.json')
         
@@ -399,6 +401,21 @@ def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Se
         
         # Convert Pydantic model to dict
         new_config = config_update.model_dump()
+        
+        # Preserve impossible_travel settings from old config (not exposed in UI)
+        if "impossible_travel" in old_config:
+            new_config["impossible_travel"] = old_config["impossible_travel"]
+        
+        # Preserve impossible_travel risk score from old config
+        if "impossible_travel" in old_config.get("risk_scores", {}):
+            new_config["risk_scores"]["impossible_travel"] = old_config["risk_scores"]["impossible_travel"]
+        
+        # Preserve legacy baseline fields if they exist (not exposed in UI)
+        if "baseline" in old_config:
+            if "typical_hours_percentage_threshold" in old_config["baseline"]:
+                new_config["baseline"]["typical_hours_percentage_threshold"] = old_config["baseline"]["typical_hours_percentage_threshold"]
+            if "typical_hours_default" in old_config["baseline"]:
+                new_config["baseline"]["typical_hours_default"] = old_config["baseline"]["typical_hours_default"]
         
         # Write to file
         with open(config_path, 'w') as f:

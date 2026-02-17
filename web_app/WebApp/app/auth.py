@@ -48,6 +48,18 @@ def get_user_by_username(username: str) -> User | None:
 
     return User(id=row["id"], username=row["username"], password_hash=row["password_hash"])
 
+def get_user_by_id(user_id: int) -> User | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, username, password_hash FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return User(id=row["id"], username=row["username"], password_hash=row["password_hash"])
+
 # -------------------------
 # 2FA / TOTP helpers
 # -------------------------

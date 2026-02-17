@@ -205,6 +205,30 @@ def validate_positive_integer(value: int, field_name: str, min_val: int = 1, max
         )
 
 
+def validate_hour(value: int, field_name: str) -> None:
+    """
+    Validate single hour value (0-23).
+    
+    Args:
+        value: The hour value to validate
+        field_name: Name of the field for error messages
+        
+    Raises:
+        HTTPException: If validation fails
+    """
+    if not isinstance(value, int):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} must be an integer"
+        )
+    
+    if value < 0 or value > 23:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} must be between 0 and 23"
+        )
+
+
 def validate_hour_list(hours: List[int], field_name: str) -> None:
     """
     Validate list of hours (0-23).

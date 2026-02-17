@@ -36,11 +36,7 @@
         New IP Prefix:
         <input type="number" id="score_new_ip_prefix" min="0">
       </label>
-      <label title="Adds points if travel speed between logins looks impossible.">
-        Impossible Travel:
-        <input type="number" id="score_impossible_travel" min="0">
-      </label>
-      <label title="Adds points for logins outside typical hours.">
+      <label title="Adds points for logins outside typical hours based on frequency. 50%+=0pts, 10-50%=5pts, 1-10%=10pts, 0.1-1%=15pts, <0.1%=20pts.">
         Unusual Login Time:
         <input type="number" id="score_unusual_login_time" min="0">
       </label>
@@ -64,23 +60,6 @@
     </div>
 
     <div class="config-group">
-      <h4>Impossible Travel</h4>
-      <p class="help">Flags logins that are too far apart in too little time.</p>
-      <label title="Look back period for comparing recent logins.">
-        Time Window (hours):
-        <input type="number" id="travel_time_window" min="1">
-      </label>
-      <label title="Minimum distance before we consider travel suspicious.">
-        Min Distance (km):
-        <input type="number" id="travel_min_distance" min="0">
-      </label>
-      <label title="Speed above this is considered impossible travel.">
-        Speed Threshold (km/h):
-        <input type="number" id="travel_speed_threshold" min="0">
-      </label>
-    </div>
-
-    <div class="config-group">
       <h4>Rate Limit</h4>
       <p class="help">Adds points when many login attempts happen in a short time window.</p>
       <label title="How far back to count recent attempts.">
@@ -93,22 +72,10 @@
 
     <div class="config-group">
       <h4>Baseline Settings</h4>
-      <p class="help">Controls what "normal" looks like for each user.</p>
+      <p class="help">User behavior is learned from login history. Hour frequencies are calculated automatically from successful logins.</p>
       <label title="Minimum successful logins before we learn a user's normal pattern.">
         Min Events for Pattern:
         <input type="number" id="baseline_min_events" min="1">
-      </label>
-      <label title="Percentage of logins in an hour to treat it as typical.">
-        Typical Hours Threshold (%):
-        <input type="number" id="baseline_threshold" min="0" max="1" step="0.01">
-      </label>
-      <label title="Start hour for typical login window (0-23).">
-        Typical Hours Start (0-23):
-        <input type="number" id="baseline_typical_start" min="0" max="23">
-      </label>
-      <label title="End hour for typical login window (0-23).">
-        Typical Hours End (0-23):
-        <input type="number" id="baseline_typical_end" min="0" max="23">
       </label>
       <label title="Recalculate typical hours every N successful logins.">
         Recalculation Frequency:
@@ -117,6 +84,14 @@
       <label title="Maximum events to scan when building a baseline.">
         Event Limit:
         <input type="number" id="baseline_event_limit" min="1">
+      </label>
+      <label title="Default typical login hour start (0-23). Used when no baseline data exists yet.">
+        Typical Hours Start:
+        <input type="number" id="baseline_hours_start" min="0" max="23">
+      </label>
+      <label title="Default typical login hour end (0-23). Used when no baseline data exists yet.">
+        Typical Hours End:
+        <input type="number" id="baseline_hours_end" min="0" max="23">
       </label>
     </div>
   </div>
@@ -157,16 +132,11 @@
   function populateConfigForm(config) {
     document.getElementById('score_new_device').value = config.risk_scores.new_device;
     document.getElementById('score_new_ip_prefix').value = config.risk_scores.new_ip_prefix;
-    document.getElementById('score_impossible_travel').value = config.risk_scores.impossible_travel;
     document.getElementById('score_unusual_login_time').value = config.risk_scores.unusual_login_time;
     document.getElementById('score_missing_user_agent').value = config.risk_scores.missing_user_agent;
     
     document.getElementById('threshold_block').value = config.decision_thresholds.block;
     document.getElementById('threshold_challenge').value = config.decision_thresholds.challenge;
-    
-    document.getElementById('travel_time_window').value = config.impossible_travel.time_window_hours;
-    document.getElementById('travel_min_distance').value = config.impossible_travel.minimum_distance_km;
-    document.getElementById('travel_speed_threshold').value = config.impossible_travel.speed_threshold_kmh;
 
     const rateLimit = config.rate_limit || {};
     const thresholds = rateLimit.thresholds || [];
@@ -178,32 +148,10 @@
     ]);
     
     document.getElementById('baseline_min_events').value = config.baseline.typical_hours_minimum_events;
-    document.getElementById('baseline_threshold').value = config.baseline.typical_hours_percentage_threshold;
-    const hours = config.baseline.typical_hours_default || [];
-    const start = hours.length ? Math.min(...hours) : 9;
-    const end = hours.length ? Math.max(...hours) : 18;
-    document.getElementById('baseline_typical_start').value = start;
-    document.getElementById('baseline_typical_end').value = end;
     document.getElementById('baseline_recalc').value = config.baseline.recalculation_frequency;
     document.getElementById('baseline_event_limit').value = config.baseline.event_limit;
-  }
-
-  function buildTypicalHoursRange(startValue, endValue) {
-    const start = Number(startValue);
-    const end = Number(endValue);
-    if (!Number.isInteger(start) || !Number.isInteger(end)) {
-      return [];
-    }
-    if (start < 0 || start > 23 || end < 0 || end > 23) {
-      return [];
-    }
-    const min = Math.min(start, end);
-    const max = Math.max(start, end);
-    const hours = [];
-    for (let i = min; i <= max; i += 1) {
-      hours.push(i);
-    }
-    return hours;
+    document.getElementById('baseline_hours_start').value = config.baseline.typical_hours_start || 9;
+    document.getElementById('baseline_hours_end').value = config.baseline.typical_hours_end || 19;
   }
 
   function renderRateThresholds(thresholds) {
@@ -253,7 +201,6 @@
       risk_scores: {
         new_device: parseInt(document.getElementById('score_new_device').value),
         new_ip_prefix: parseInt(document.getElementById('score_new_ip_prefix').value),
-        impossible_travel: parseInt(document.getElementById('score_impossible_travel').value),
         unusual_login_time: parseInt(document.getElementById('score_unusual_login_time').value),
         missing_user_agent: parseInt(document.getElementById('score_missing_user_agent').value)
       },
@@ -261,24 +208,16 @@
         block: parseInt(document.getElementById('threshold_block').value),
         challenge: parseInt(document.getElementById('threshold_challenge').value)
       },
-      impossible_travel: {
-        time_window_hours: parseFloat(document.getElementById('travel_time_window').value),
-        minimum_distance_km: parseFloat(document.getElementById('travel_min_distance').value),
-        speed_threshold_kmh: parseFloat(document.getElementById('travel_speed_threshold').value)
-      },
       rate_limit: {
         window_seconds: parseInt(document.getElementById('rate_window_seconds').value),
         thresholds: readRateThresholds()
       },
       baseline: {
         typical_hours_minimum_events: parseInt(document.getElementById('baseline_min_events').value),
-        typical_hours_percentage_threshold: parseFloat(document.getElementById('baseline_threshold').value),
-        typical_hours_default: buildTypicalHoursRange(
-          document.getElementById('baseline_typical_start').value,
-          document.getElementById('baseline_typical_end').value
-        ),
         recalculation_frequency: parseInt(document.getElementById('baseline_recalc').value),
-        event_limit: parseInt(document.getElementById('baseline_event_limit').value)
+        event_limit: parseInt(document.getElementById('baseline_event_limit').value),
+        typical_hours_start: parseInt(document.getElementById('baseline_hours_start').value),
+        typical_hours_end: parseInt(document.getElementById('baseline_hours_end').value)
       }
     };
   }

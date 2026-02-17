@@ -34,7 +34,7 @@ def load_risk_config() -> Dict[str, Any]:
             "missing_user_agent": 5
         },
         "decision_thresholds": {
-            "block": 60,
+            "block": 80,
             "challenge": 30
         },
         "impossible_travel": {
@@ -45,17 +45,16 @@ def load_risk_config() -> Dict[str, Any]:
         "rate_limit": {
             "window_seconds": 30,
             "thresholds": [
-                {"attempts": 5, "score": 15},
-                {"attempts": 10, "score": 30},
-                {"attempts": 20, "score": 60}
+                {"attempts": 5, "score": 20},
+                {"attempts": 10, "score": 80}
             ]
         },
         "baseline": {
             "typical_hours_minimum_events": 10,
-            "typical_hours_percentage_threshold": 0.1,
-            "typical_hours_default": list(range(9, 19)),
             "recalculation_frequency": 10,
-            "event_limit": 50
+            "event_limit": 50,
+            "typical_hours_start": 9,
+            "typical_hours_end": 19
         }
     }
     
@@ -118,31 +117,28 @@ def _get_location_from_ip(ip: Optional[str]) -> Optional[Tuple[float, float]]:
         return None
     
     try:
-        reader = geoip2.database.Reader('GeoLite2-City.mmdb')
-        response = reader.city(ip)
-        
-        lat = response.location.latitude
-        lon = response.location.longitude
-        reader.close()
-        
-        if lat is not None and lon is not None:
-            return (lat, lon)
+        with geoip2.database.Reader('GeoLite2-City.mmdb') as reader:
+            response = reader.city(ip)
+            lat = response.location.latitude
+            lon = response.location.longitude
+            
+            if lat is not None and lon is not None:
+                return (lat, lon)
         return None
     except (geoip2.errors.AddressNotFoundError, FileNotFoundError, Exception):
         return None
 
-def _calculate_typical_hours(events: List[LoginEvent]) -> List[int]:
-    """Calculate typical login hours from historical events.
+def _calculate_hour_frequencies(events: List[LoginEvent]) -> Dict[int, float]:
+    """Calculate login hour frequency percentages from historical events.
     
-    Requires at least minimum events to establish a pattern. This prevents
-    false positives for new accounts with limited history.
+    Returns a dict mapping hour (0-23) to frequency percentage (0.0-1.0).
+    Requires minimum events to establish a pattern.
     """
     config = load_risk_config()
     min_events = config["baseline"]["typical_hours_minimum_events"]
-    threshold_percentage = config["baseline"]["typical_hours_percentage_threshold"]
     
     if not events or len(events) < min_events:
-        return []
+        return {}
     
     hour_counts = {}
     for event in events:
@@ -151,14 +147,13 @@ def _calculate_typical_hours(events: List[LoginEvent]) -> List[int]:
             hour_counts[hour] = hour_counts.get(hour, 0) + 1
     
     if not hour_counts:
-        return []
+        return {}
     
-    # Consider hours with at least threshold percentage of total logins as "typical"
+    # Calculate frequency percentage for each hour
     total = sum(hour_counts.values())
-    threshold = max(1, total * threshold_percentage)
-    typical_hours = [hour for hour, count in hour_counts.items() if count >= threshold]
+    hour_frequencies = {hour: count / total for hour, count in hour_counts.items()}
     
-    return sorted(typical_hours)
+    return hour_frequencies
 
 def get_or_build_baseline(db: Session, username: str) -> UserBaseline:
     baseline = db.query(UserBaseline).filter(UserBaseline.username == username).one_or_none()
@@ -186,16 +181,15 @@ def get_or_build_baseline(db: Session, username: str) -> UserBaseline:
         if e.ip_prefix and e.ip_prefix not in known_prefixes:
             known_prefixes.append(e.ip_prefix)
 
-    # Calculate typical login hours from historical data; fall back to configured default
-    default_hours = config["baseline"].get("typical_hours_default", list(range(9, 19)))
-    typical_hours = _calculate_typical_hours(events) or default_hours
-    typical_hours_json = _dumps_list(typical_hours)
+    # Calculate hour frequency percentages from historical data
+    hour_frequencies = _calculate_hour_frequencies(events)
+    hour_freq_json = json.dumps(hour_frequencies) if hour_frequencies else None
 
     baseline = UserBaseline(
         username=username,
         known_device_tokens=_dumps_list(known_devices),
         known_ip_prefixes=_dumps_list(known_prefixes),
-        typical_login_hours=typical_hours_json,
+        typical_login_hours=hour_freq_json,
     )
     db.add(baseline)
     db.commit()
@@ -282,7 +276,7 @@ def score_login(db: Session, username: str, ip: Optional[str], user_agent: Optio
                 LoginEvent.event_time_utc >= window_start,
             )
             .count()
-        )
+        ) + 1  # Include current attempt
 
         matched = None
         for rule in sorted(thresholds, key=lambda r: r.get("attempts", 0)):
@@ -291,17 +285,68 @@ def score_login(db: Session, username: str, ip: Optional[str], user_agent: Optio
 
         if matched:
             score += int(matched.get("score", 0) or 0)
-            reasons.append(f"rate_limit_ge_{matched.get('attempts', 0)}")
+            # Semantic reason labels for rate limiting
+            attempts = matched.get('attempts', 0)
+            if attempts >= 10:
+                reasons.append("excessive_login_attempts")
+            elif attempts >= 5:
+                reasons.append("rapid_login_attempts")
+            else:
+                reasons.append(f"rate_limit_ge_{attempts}")
 
-    # Check for unusual login time
+    # Check for unusual login time (probability-based scoring)
     current_hour = datetime.utcnow().hour
     
     try:
-        default_hours = config["baseline"].get("typical_hours_default", list(range(9, 19)))
-        typical_hours = json.loads(baseline.typical_login_hours) if baseline.typical_login_hours else default_hours
-        if typical_hours and current_hour not in typical_hours:
-            score += config["risk_scores"]["unusual_login_time"]
-            reasons.append("unusual_login_time")
+        if baseline.typical_login_hours:
+            hour_frequencies = json.loads(baseline.typical_login_hours)
+            
+            # Check if it's a dict (new format) or list (old format for backward compatibility)
+            if isinstance(hour_frequencies, dict):
+                # New probability-based scoring
+                freq = hour_frequencies.get(str(current_hour), 0.0)
+                
+                # Score based on rarity:
+                # 50%+ → 0 points (very common)
+                # 10-50% → 5 points (somewhat common)
+                # 1-10% → 10 points (uncommon)
+                # 0.1-1% → 15 points (rare)
+                # <0.1% or never → 20 points (very rare/never)
+                if freq >= 0.5:
+                    time_score = 0
+                elif freq >= 0.1:
+                    time_score = 5
+                elif freq >= 0.01:
+                    time_score = 10
+                elif freq >= 0.001:
+                    time_score = 15
+                else:
+                    time_score = config["risk_scores"]["unusual_login_time"]
+                
+                if time_score > 0:
+                    score += time_score
+                    reasons.append(f"unusual_login_time_{time_score}pts")
+            else:
+                # Old format: list of typical hours (backward compatibility)
+                if current_hour not in hour_frequencies:
+                    score += config["risk_scores"]["unusual_login_time"]
+                    reasons.append("unusual_login_time")
+        else:
+            # No baseline data: check against default hours range
+            start_hour = config["baseline"].get("typical_hours_start", 9)
+            end_hour = config["baseline"].get("typical_hours_end", 19)
+            
+            # Handle overnight ranges (e.g., 22:00-06:00)
+            if start_hour < end_hour:
+                # Normal range (e.g., 9-19)
+                is_typical = start_hour <= current_hour < end_hour
+            else:
+                # Overnight range (e.g., 22-6 means 22:00-23:59 OR 00:00-05:59)
+                is_typical = current_hour >= start_hour or current_hour < end_hour
+            
+            if not is_typical:
+                score += config["risk_scores"]["unusual_login_time"]
+                reasons.append("unusual_login_time")
     except Exception:
         pass  # Ignore if parsing fails
 
@@ -361,11 +406,11 @@ def update_baseline_on_success(db: Session, username: str, device_token: Optiona
             .all()
         )
         
-        typical_hours = _calculate_typical_hours(recent_events)
-        new_typical_hours_json = _dumps_list(typical_hours) if typical_hours else None
+        hour_frequencies = _calculate_hour_frequencies(recent_events)
+        new_hour_freq_json = json.dumps(hour_frequencies) if hour_frequencies else None
         
-        if baseline.typical_login_hours != new_typical_hours_json:
-            baseline.typical_login_hours = new_typical_hours_json
+        if baseline.typical_login_hours != new_hour_freq_json:
+            baseline.typical_login_hours = new_hour_freq_json
             changed = True
 
     if changed:

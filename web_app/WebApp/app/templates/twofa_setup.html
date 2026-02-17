@@ -9,6 +9,13 @@
       <button type="submit">Disable 2FA</button>
     </form>
   {% else %}
+    {% if required %}
+    <div class="error" style="margin-bottom: 12px;">
+      <b>⚠️ 2FA Setup Required</b><br>
+      Your login requires additional verification. Please set up 2FA to continue.
+    </div>
+    {% endif %}
+    
     <p>Scan the QR code using Google/Microsoft Authenticator, then enter the 6-digit code to confirm.</p>
 
     {% if qr_uri %}
@@ -17,7 +24,7 @@
 
     <p><b>Manual secret:</b> {{ secret }}</p>
 
-    <form method="post" action="/2fa/setup">
+    <form method="post" action="{% if required %}/2fa/setup/required{% else %}/2fa/setup{% endif %}">
       <div class="row">
         <label>6-digit code</label>
         <input name="code" inputmode="numeric" autocomplete="one-time-code" />

@@ -1,11 +1,10 @@
 """CSRF protection utilities for admin forms."""
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from fastapi import HTTPException, Request
-import os
 
 
 # Use the same secret as session middleware for consistency
-CSRF_SECRET = os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me")
+CSRF_SECRET = "aegirisk-demo-session-key-2026"
 CSRF_TOKEN_MAX_AGE = 3600  # 1 hour
 
 

@@ -28,7 +28,7 @@ app = FastAPI(title="RBA Risk Engine")
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me"),
+    secret_key="aegirisk-demo-session-key-2026",
     https_only=os.getenv("RISK_ENGINE_HTTPS_ONLY", "false").lower() == "true",
     max_age=int(os.getenv("RISK_ENGINE_ADMIN_SESSION_TIMEOUT_SEC", "900")),
     same_site="strict",  # CSRF protection via cookie policy
@@ -47,15 +47,6 @@ app.include_router(dashboard_router)
 def init_db():
     Base.metadata.create_all(bind=engine)
     AuditBase.metadata.create_all(bind=audit_engine)
-    
-    # Security warning for default secret in production
-    session_secret = os.getenv("RISK_ENGINE_SESSION_SECRET", "dev-secret-change-me")
-    if session_secret == "dev-secret-change-me":
-        print("\n" + "="*70)
-        print("⚠️  WARNING: Using default session secret!")
-        print("⚠️  Set RISK_ENGINE_SESSION_SECRET environment variable")
-        print("⚠️  Generate a strong secret with: python -c 'import secrets; print(secrets.token_urlsafe(32))'")
-        print("="*70 + "\n")
 
 @app.get("/")
 def read_root():

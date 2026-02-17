@@ -15,6 +15,7 @@ from .db import init_db, get_conn
 from .auth import (
     create_user,
     get_user_by_username,
+    get_user_by_id,
     verify_password,
     get_2fa_info,
     set_2fa_for_user,
@@ -190,11 +191,22 @@ def login(
     password: str = Form(...),
 ):
     # request context extraction
-
     context_features = request_context_extract(request, username)
     print(context_features)
 
+    # Call risk engine BEFORE password verification (for proper rate limiting)
+    risk = call_risk_engine(context_features)
+    decision = risk.get("decision", "allow")
+    print(f"[risk] decision={decision} score={risk.get('score')} reasons={risk.get('reasons')}", flush=True)
 
+    # Check for BLOCK decision immediately
+    if decision == "block":
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Login blocked due to suspicious activity. Try again later."}
+        )
+
+    # Now verify credentials
     user = get_user_by_username(username)
     if not user or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
@@ -203,29 +215,15 @@ def login(
 
     enabled, secret = get_2fa_info(user.id)
 
-    # If 2FA is enabled AND policy says challenge → go to 2FA step
-    risk = call_risk_engine(context_features)
-    decision = risk.get("decision", "allow")
-    print(f"[risk] decision={decision} score={risk.get('score')} reasons={risk.get('reasons')}", flush=True)
-
-    if decision == "block":
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Login blocked due to suspicious activity. Try again later."}
-        )
-
-    # If risk says challenge, send them through your existing 2FA step (only if user has 2FA enabled)
+    # If risk says challenge, send them through 2FA step (force setup if not enabled)
     if decision == "challenge":
         if enabled and secret:
             request.session["pending_2fa_user_id"] = user.id
             return RedirectResponse(url="/2fa", status_code=303)
         else:
-            # MVP behavior if user doesn't have 2FA enabled:
-            # either force setup or just deny (choose one; deny is simpler/safer)
-            return templates.TemplateResponse(
-                "login.html",
-                {"request": request, "error": "Additional verification required, but 2FA is not enabled for this account."}
-            )
+            # Force 2FA setup for challenge decisions
+            request.session["pending_2fa_user_id"] = user.id
+            return RedirectResponse(url="/2fa/setup/required", status_code=303)
 
     # Otherwise: login completes immediately (ALLOW)
     request.session["username"] = user.username
@@ -272,6 +270,77 @@ def twofa_verify(request: Request, code: str = Form(...)):
 # -------------------------
 # 2FA Setup (Enable/Disable)
 # -------------------------
+
+@app.get("/2fa/setup/required", response_class=HTMLResponse)
+def twofa_setup_required(request: Request):
+    """Force 2FA setup for users who don't have it when challenge decision occurs"""
+    user_id = request.session.get("pending_2fa_user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        request.session.clear()
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Generate a temporary secret for setup
+    temp_secret = pyotp.random_base32()
+    issuer = "MockWebApp"
+    otp_uri = pyotp.TOTP(temp_secret).provisioning_uri(name=user.username, issuer_name=issuer)
+    qr_uri = make_qr_data_uri(otp_uri)
+
+    request.session["twofa_temp_secret"] = temp_secret
+
+    return templates.TemplateResponse(
+        "twofa_setup.html",
+        {
+            "request": request,
+            "already_enabled": False,
+            "qr_uri": qr_uri,
+            "secret": temp_secret,
+            "error": None,
+            "required": True,  # Indicate this is mandatory
+        },
+    )
+
+@app.post("/2fa/setup/required", response_class=HTMLResponse)
+def twofa_setup_required_confirm(request: Request, code: str = Form(...)):
+    """Confirm forced 2FA setup"""
+    user_id = request.session.get("pending_2fa_user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        request.session.clear()
+        return RedirectResponse(url="/login", status_code=303)
+
+    temp_secret = request.session.get("twofa_temp_secret")
+    if not temp_secret:
+        return RedirectResponse(url="/2fa/setup/required", status_code=303)
+
+    if not verify_totp(temp_secret, code):
+        issuer = "MockWebApp"
+        otp_uri = pyotp.TOTP(temp_secret).provisioning_uri(name=user.username, issuer_name=issuer)
+        qr_uri = make_qr_data_uri(otp_uri)
+        return templates.TemplateResponse(
+            "twofa_setup.html",
+            {
+                "request": request,
+                "already_enabled": False,
+                "qr_uri": qr_uri,
+                "secret": temp_secret,
+                "error": "Invalid code. Try again.",
+                "required": True,
+            },
+        )
+
+    # Save the secret for this user
+    set_2fa_for_user(user.id, temp_secret)
+    request.session.pop("twofa_temp_secret", None)
+
+    # Now redirect to 2FA verification
+    return RedirectResponse(url="/2fa", status_code=303)
 
 @app.get("/2fa/setup", response_class=HTMLResponse)
 def twofa_setup(request: Request):

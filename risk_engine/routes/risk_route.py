@@ -9,6 +9,8 @@ from risk_engine.json_schema import RiskEvaluateRequestJSON, RiskEvaluateRespons
 from risk_engine.db.risk_model import LoginEvent
 from risk_engine.component.risk_utils import score_login, update_baseline_on_success
 
+from risk_engine.config import EVENT_TTL_SECONDS
+
 risk_router = APIRouter(
     prefix="/risk",
     tags=["risk"],
@@ -59,7 +61,7 @@ def evaluate(request: RiskEvaluateRequestJSON, db: Session = Depends(get_db)):
 
 @risk_router.post("/auth-result", response_model=RiskAuthResultResponseJSON)
 def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)):
-    EVENT_TTL_SECONDS = 300
+
 
     # 1) Load event
     evt = db.query(LoginEvent).filter(LoginEvent.id == request.event_id).first()

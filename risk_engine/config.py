@@ -59,3 +59,7 @@ COOKIE_NAME = "__Host_rba_dt"
 TOKEN_TTL_DAYS = 90
 EXPIRES_WITHIN_DAYS = 7
 
+
+
+# risk settings
+EVENT_TTL_SECONDS = 300

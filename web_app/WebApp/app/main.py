@@ -50,7 +50,7 @@ def make_qr_data_uri(text: str) -> str:
     return f"data:image/png;base64,{b64}"
 
 RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
-RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
+RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "R0WJJVVUSXj2xAB42Ijtg6irSPW4S61kY7MIrhC7V5M")
 
 if not RISK_ENGINE_API_KEY:
     print("[risk] warning: RISK_ENGINE_API_KEY is not set; risk engine calls may return 401", flush=True)
@@ -85,6 +85,7 @@ def call_risk_auth_result(event_id: int, outcome: str):
         with httpx.Client(timeout=2.0) as client:
             resp = client.post(f"{RISK_ENGINE_URL}/risk/auth-result", json={"event_id": event_id, "outcome": outcome}, headers=headers)
             resp.raise_for_status()
+            print(resp.json())
             return resp.json()
 
     except Exception as e:

@@ -35,5 +35,6 @@ class RiskAuthResultRequestJSON(BaseModel):
 
 class RiskAuthResultResponseJSON(BaseModel):
     event_id: int
-    processed: bool
+    status: Literal["expired","confirmed_success","confirmed_failure"]
     baseline_updated: bool
+    expired: bool

@@ -63,7 +63,7 @@ def evaluate(request: RiskEvaluateRequestJSON, db: Session = Depends(get_db)):
 @risk_router.post("/auth-result", response_model=RiskAuthResultResponseJSON)
 def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)):
 
-
+    print("auth result called")
     # 1) Load event
     evt = db.query(LoginEvent).filter(LoginEvent.id == request.event_id).first()
     if not evt:
@@ -71,9 +71,9 @@ def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)
 
     # 2) check if login event expired
     event_time = evt.event_time_utc
-    now = datetime.now()
+    now = datetime.utcnow()
     expired = now >= (event_time + timedelta(seconds=EVENT_TTL_SECONDS))
-
+    print("expired :" , expired)
     # convert pending to expired status when past TTL
     if evt.status == "pending" and expired:
         evt.status = "expired"
@@ -113,6 +113,7 @@ def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)
     baseline_updated = False
 
     if request.outcome == "success":
+        print("auth result reach success")
         evt.status = "confirmed_success"
         db.commit()
 
@@ -126,6 +127,7 @@ def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)
         baseline_updated = True
 
     elif request.outcome == "failure":
+        print("auth result reach failure")
         evt.status = "confirmed_failure"
         db.commit()
 

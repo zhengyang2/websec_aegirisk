@@ -4,7 +4,8 @@ from fastapi import Depends, APIRouter
 from sqlalchemy.orm import Session
 
 from risk_engine.dependancy import get_db, require_api_key
-from risk_engine.json_schema import RiskEvaluateRequestJSON, RiskEvaluateResponseJSON
+from risk_engine.json_schema import RiskEvaluateRequestJSON, RiskEvaluateResponseJSON, RiskAuthResultResponseJSON, \
+    RiskAuthResultRequestJSON
 from risk_engine.db.risk_model import LoginEvent
 from risk_engine.component.risk_utils import score_login, update_baseline_on_success
 
@@ -51,3 +52,10 @@ def evaluate(request: RiskEvaluateRequestJSON, db: Session = Depends(get_db)):
         update_baseline_on_success(db, request.username, request.device_token, ip_prefix)
 
     return {"decision": decision, "score": score, "reasons": reasons}
+
+
+
+@risk_router.post("/auth-result", response_model=RiskAuthResultResponseJSON)
+def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)):
+
+    pass

@@ -34,6 +34,7 @@ def evaluate(request: RiskEvaluateRequestJSON, db: Session = Depends(get_db)):
     )
 
     # store the event (always)
+    initial_status = "confirmed_failure" if decision == "block" else "pending"
     evt = LoginEvent(
         username=request.username,
         event_time_utc=event_time,
@@ -44,7 +45,7 @@ def evaluate(request: RiskEvaluateRequestJSON, db: Session = Depends(get_db)):
         decision=decision,
         score=score,
         reasons=json.dumps(reasons),
-        status="pending"
+        status=initial_status
     )
     db.add(evt)
     db.commit()

@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import pyotp
 import qrcode
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 
 from .db import init_db, get_conn
 from .auth import (
@@ -28,6 +29,7 @@ from .cookie_setter import generate_device_id, set_cookie, delete_cookie, Cookie
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = BASE_DIR +"/web.env"
 
 app = FastAPI(title="Mock WebApp (Register/Login + Adaptive 2FA)")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -49,8 +51,12 @@ def make_qr_data_uri(text: str) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
 
+
+load_dotenv(dotenv_path=ENV_PATH)
+
 RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
-RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "R0WJJVVUSXj2xAB42Ijtg6irSPW4S61kY7MIrhC7V5M")
+RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
+
 
 if not RISK_ENGINE_API_KEY:
     print("[risk] warning: RISK_ENGINE_API_KEY is not set; risk engine calls may return 401", flush=True)

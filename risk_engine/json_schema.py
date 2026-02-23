@@ -24,7 +24,16 @@ class RiskEvaluateRequestJSON(BaseModel):
     device_token: Optional[str] = None
 
 class RiskEvaluateResponseJSON(BaseModel):
+    event_id: int
     decision: Literal["allow", "challenge", "block"]
     score: int
     reasons: List[str]
 
+class RiskAuthResultRequestJSON(BaseModel):
+    event_id: int
+    outcome: Literal["success", "failure"]
+
+class RiskAuthResultResponseJSON(BaseModel):
+    event_id: int
+    processed: bool
+    baseline_updated: bool

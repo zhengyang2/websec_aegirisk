@@ -290,6 +290,26 @@ def get_risk_config(request: Request, db: Session = Depends(get_db), _=Depends(r
     return JSONResponse(content=config)
 
 
+@dashboard_router.post("/config/reload")
+def reload_config(request: Request, _=Depends(require_admin)):
+    """Reload risk configuration from JSON file (clears cache)."""
+    # Verify CSRF token from header
+    csrf_token = request.headers.get("X-CSRF-Token")
+    try:
+        verify_csrf_token(request, csrf_token)
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+    
+    reload_risk_config()
+    config = load_risk_config()
+    
+    return JSONResponse(content={
+        "status": "success",
+        "message": "Configuration reloaded from risk_config.json",
+        "config": config
+    })
+
+
 @dashboard_router.post("/config")
 def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Session = Depends(get_db), _=Depends(require_admin)):
     """Update risk scoring configuration."""

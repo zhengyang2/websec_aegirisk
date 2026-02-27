@@ -54,7 +54,7 @@
         <input type="number" id="filterMaxScore" placeholder="Max score" class="filter-input filter-input-small">
       </div>
       <div class="filter-group">
-        <button id="clearFilters" class="btn btn-secondary btn-small">Clear Filters</button>
+        <button id="clearFilters" type="button" class="btn btn-secondary btn-small">Clear Filters</button>
       </div>
     </div>
     
@@ -89,24 +89,28 @@
   </section>
 </div>
 
+<script id="events-data" type="application/json">{{ events | tojson | safe }}</script>
 <script>
-  // Use JSON.parse to avoid editor false-positives on template syntax.
-  const EVENTS = JSON.parse('{{ events | tojson | safe }}');
+  const eventsDataEl = document.getElementById('events-data');
+  const EVENTS = eventsDataEl ? JSON.parse(eventsDataEl.textContent || '[]') : [];
 
   // Filter functionality
   function applyFilters() {
-    const usernameFilter = document.getElementById('filterUsername').value.toLowerCase();
-    const decisionFilter = document.getElementById('filterDecision').value.toLowerCase();
-    const minScore = document.getElementById('filterMinScore').value;
-    const maxScore = document.getElementById('filterMaxScore').value;
+    const usernameFilter = (document.getElementById('filterUsername').value || '').trim().toLowerCase();
+    const decisionFilter = (document.getElementById('filterDecision').value || '').trim().toLowerCase();
+    const minScoreRaw = document.getElementById('filterMinScore').value;
+    const maxScoreRaw = document.getElementById('filterMaxScore').value;
+
+    const minScore = minScoreRaw === '' ? null : Number(minScoreRaw);
+    const maxScore = maxScoreRaw === '' ? null : Number(maxScoreRaw);
 
     const rows = document.querySelectorAll('#eventsTableBody tr');
     let visibleCount = 0;
 
     rows.forEach(row => {
-      const username = row.getAttribute('data-username').toLowerCase();
-      const decision = row.getAttribute('data-decision').toLowerCase();
-      const score = parseInt(row.getAttribute('data-score'));
+      const username = ((row.getAttribute('data-username') || row.cells[0]?.textContent || '').trim()).toLowerCase();
+      const decision = ((row.getAttribute('data-decision') || '').trim()).toLowerCase();
+      const score = Number(row.getAttribute('data-score'));
 
       let show = true;
 
@@ -121,12 +125,12 @@
       }
 
       // Min score filter
-      if (minScore && score < parseInt(minScore)) {
+      if (minScore !== null && !Number.isNaN(minScore) && score < minScore) {
         show = false;
       }
 
       // Max score filter
-      if (maxScore && score > parseInt(maxScore)) {
+      if (maxScore !== null && !Number.isNaN(maxScore) && score > maxScore) {
         show = false;
       }
 
@@ -135,19 +139,40 @@
     });
   }
 
-  // Attach event listeners
-  document.getElementById('filterUsername').addEventListener('input', applyFilters);
-  document.getElementById('filterDecision').addEventListener('change', applyFilters);
-  document.getElementById('filterMinScore').addEventListener('input', applyFilters);
-  document.getElementById('filterMaxScore').addEventListener('input', applyFilters);
+  const filterUsernameEl = document.getElementById('filterUsername');
+  const filterDecisionEl = document.getElementById('filterDecision');
+  const filterMinScoreEl = document.getElementById('filterMinScore');
+  const filterMaxScoreEl = document.getElementById('filterMaxScore');
+  const clearFiltersEl = document.getElementById('clearFilters');
 
-  document.getElementById('clearFilters').addEventListener('click', function() {
-    document.getElementById('filterUsername').value = '';
-    document.getElementById('filterDecision').value = '';
-    document.getElementById('filterMinScore').value = '';
-    document.getElementById('filterMaxScore').value = '';
-    applyFilters();
-  });
+  if (filterUsernameEl && filterDecisionEl && filterMinScoreEl && filterMaxScoreEl) {
+    filterUsernameEl.addEventListener('input', applyFilters);
+    filterUsernameEl.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') applyFilters();
+    });
+
+    filterDecisionEl.addEventListener('change', applyFilters);
+
+    filterMinScoreEl.addEventListener('input', applyFilters);
+    filterMinScoreEl.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') applyFilters();
+    });
+
+    filterMaxScoreEl.addEventListener('input', applyFilters);
+    filterMaxScoreEl.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') applyFilters();
+    });
+  }
+
+  if (clearFiltersEl && filterUsernameEl && filterDecisionEl && filterMinScoreEl && filterMaxScoreEl) {
+    clearFiltersEl.addEventListener('click', function() {
+      filterUsernameEl.value = '';
+      filterDecisionEl.value = '';
+      filterMinScoreEl.value = '';
+      filterMaxScoreEl.value = '';
+      applyFilters();
+    });
+  }
 </script>
 
 </body>

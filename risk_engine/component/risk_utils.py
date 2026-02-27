@@ -207,7 +207,7 @@ def score_login(db: Session, username: str, ip: Optional[str], user_agent: Optio
     known_devices = _loads_list(baseline.known_device_tokens)
     known_prefixes = _loads_list(baseline.known_ip_prefixes)
 
-    if device_token and device_token not in known_devices:
+    if not device_token or device_token not in known_devices:
         score += config["risk_scores"]["new_device"]
         reasons.append("new_device")
 

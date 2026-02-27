@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -22,6 +22,8 @@ from risk_engine.routes.dashboard_route import dashboard_router
 from risk_engine.config import ENV_PATH
 #component import
 from risk_engine import config
+from risk_engine.component.risk_utils import reload_risk_config, load_risk_config
+from risk_engine.dependancy import require_api_key
 
 
 app = FastAPI(title="RBA Risk Engine")
@@ -74,3 +76,14 @@ def setup():
         raise HTTPException(status_code=500, detail="Failed to initialize")
 
     return {"api_key": api_key}
+
+@app.post("/config/reload")
+def reload_config_endpoint(_=Depends(require_api_key)):
+    """Reload risk configuration from JSON file. Requires API key."""
+    reload_risk_config()
+    current_config = load_risk_config()
+    return {
+        "status": "success",
+        "message": "Configuration reloaded from risk_config.json",
+        "config": current_config
+    }

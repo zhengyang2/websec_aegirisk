@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import pyotp
 import qrcode
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 
 from .db import init_db, get_conn
 from .auth import (
@@ -28,6 +29,7 @@ from .cookie_setter import generate_device_id, set_cookie, delete_cookie, Cookie
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = BASE_DIR +"/web.env"
 
 app = FastAPI(title="Mock WebApp (Register/Login + Adaptive 2FA)")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -49,8 +51,12 @@ def make_qr_data_uri(text: str) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
 
+
+load_dotenv(dotenv_path=ENV_PATH)
+
 RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
 RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
+
 
 if not RISK_ENGINE_API_KEY:
     print("[risk] warning: RISK_ENGINE_API_KEY is not set; risk engine calls may return 401", flush=True)
@@ -73,6 +79,26 @@ def call_risk_engine(context_features: dict) -> dict:
     except Exception as e:
         print(f"[risk] engine call failed, fail-open allow. err={e}", flush=True)
         return {"decision": "allow", "score": 0, "reasons": ["risk_engine_unavailable"]}
+
+
+def call_risk_auth_result(event_id: int, outcome: str):
+
+    headers = {}
+    if RISK_ENGINE_API_KEY:
+        headers["X-API-Key"] = RISK_ENGINE_API_KEY  # matches your require_api_key dependency style
+
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.post(f"{RISK_ENGINE_URL}/risk/auth-result", json={"event_id": event_id, "outcome": outcome}, headers=headers)
+            resp.raise_for_status()
+            print(resp.json())
+            return resp.json()
+
+    except Exception as e:
+        print(f"call risk auth falied: {e}", flush=True)
+        return None
+
+
 
 def check_cookie_action(request, user):
     # If not logged in, do nothing (no engine token issuance)
@@ -197,6 +223,12 @@ def login(
     # Call risk engine BEFORE password verification (for proper rate limiting)
     risk = call_risk_engine(context_features)
     decision = risk.get("decision", "allow")
+    event_id = risk.get("event_id")
+
+    # Keep event_id for later (needed for challenge/2FA path)
+    if event_id is not None:
+        request.session["risk_event_id"] = event_id
+
     print(f"[risk] decision={decision} score={risk.get('score')} reasons={risk.get('reasons')}", flush=True)
 
     # Check for BLOCK decision immediately
@@ -209,6 +241,12 @@ def login(
     # Now verify credentials
     user = get_user_by_username(username)
     if not user or not verify_password(password, user.password_hash):
+
+        # Finalize as failure (password failed)
+        if event_id is not None:
+            call_risk_auth_result(event_id, "failure")
+            request.session.pop("risk_event_id", None)
+
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Invalid username or password."}
         )
@@ -227,6 +265,11 @@ def login(
 
     # Otherwise: login completes immediately (ALLOW)
     request.session["username"] = user.username
+
+    if event_id is not None:
+        call_risk_auth_result(event_id, "success")
+        request.session.pop("risk_event_id", None)
+
     return RedirectResponse(url="/", status_code=303)
 
 @app.post("/logout")
@@ -251,8 +294,16 @@ def twofa_verify(request: Request, code: str = Form(...)):
     if not user_id:
         return RedirectResponse(url="/login", status_code=303)
 
+    # retrieve event_id saved during /login
+    event_id = request.session.get("risk_event_id")
+
     enabled, secret = get_2fa_info(user_id)
     if not enabled or not secret:
+
+        if event_id is not None:
+            call_risk_auth_result(event_id, "failure")
+            request.session.pop("risk_event_id", None)
+
         request.session.pop("pending_2fa_user_id", None)
         return RedirectResponse(url="/login", status_code=303)
 
@@ -265,6 +316,12 @@ def twofa_verify(request: Request, code: str = Form(...)):
 
     request.session.pop("pending_2fa_user_id", None)
     request.session["username"] = row["username"]
+
+    # NEW: finalize success in risk engine (baseline update happens there)
+    if event_id is not None:
+        call_risk_auth_result(event_id, "success")
+        request.session.pop("risk_event_id", None)
+
     return RedirectResponse(url="/", status_code=303)
 
 # -------------------------

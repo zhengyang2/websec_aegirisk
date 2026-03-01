@@ -1,7 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, Enum
 from datetime import datetime
 
 from risk_engine.db.db_setup import Base
+
+STATUS_ENUM = Enum(
+    "pending",
+    "confirmed_success",
+    "confirmed_failure",
+    "expired")
 
 class LoginEvent(Base):
     __tablename__ = "login_events"
@@ -19,6 +25,7 @@ class LoginEvent(Base):
     decision = Column(String, nullable=False)                  # allow/challenge/block
     score = Column(Integer, nullable=False, default=0)
     reasons = Column(Text, nullable=True)                      # JSON string or comma list
+    status = Column(STATUS_ENUM, nullable=False, default="pending")
 
 
 class UserBaseline(Base):

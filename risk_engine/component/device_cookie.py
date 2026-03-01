@@ -21,8 +21,6 @@ def generate_device_token(db: Session,
                           force_rotate: bool = False) -> DeviceTokenResult:
     """
     Returns DeviceTokenResult
-
-
     """
 
     try:

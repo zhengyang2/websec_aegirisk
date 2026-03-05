@@ -22,6 +22,22 @@ start with PC ip
 
 ```
 
+## Setup
+first time setup guide 
+
+place **.env** file into risk engine folder
+```
+RISK_ENGINE_ENFORCE_API_KEY=1
+
+```
+
+Access the /setup route on the risk engine to generate API key for web app to use to connect to the risk engine.  
+
+
+place **web.env** file into web_app/WebApp/app folder edit api key to own generated
+```
+RISK_ENGINE_API_KEY = "<API-KEY>"
+```
 
 
 ## Risk Engine API key 

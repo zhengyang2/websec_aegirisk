@@ -32,6 +32,7 @@ class RiskEvaluateResponseJSON(BaseModel):
 class RiskAuthResultRequestJSON(BaseModel):
     event_id: int
     outcome: Literal["success", "failure"]
+    device_token: Optional[str] = None
 
 class RiskAuthResultResponseJSON(BaseModel):
     event_id: int

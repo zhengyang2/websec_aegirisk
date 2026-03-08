@@ -4,12 +4,12 @@ SG IP
 curl -i -c cookies.txt ^
   -H "User-Agent: Mozilla/5.0" ^
   -H "X-Forwarded-For: 121.7.130.123" ^
-  -d "username=test4&password=12345678" ^
+  -d "username=abc&password=123qweqwe" ^
   http://127.0.0.1:8080/login
 
 US IP
 curl -i -b cookies.txt ^
   -H "User-Agent: Mozilla/5.0" ^
   -H "X-Forwarded-For: 173.194.76.99" ^
-  -d "username=test4&password=12345678" ^
+  -d "username=abc&password=123qweqwe" ^
   http://127.0.0.1:8080/login

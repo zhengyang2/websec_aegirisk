@@ -34,6 +34,7 @@ app.add_middleware(
     https_only=os.getenv("RISK_ENGINE_HTTPS_ONLY", "false").lower() == "true",
     max_age=int(os.getenv("RISK_ENGINE_ADMIN_SESSION_TIMEOUT_SEC", "900")),
     same_site="strict",  # CSRF protection via cookie policy
+    session_cookie="risk_engine_admin_session",
 )
 
 # Mount static files for dashboard CSS/JS

@@ -1,109 +1,113 @@
 # websec_aegirisk
 
-to start risk engine API in root folder
-
-```
-
-uvicorn risk_engine.api:app --reload --port 8003
-
-```
-to see api opened use localhost/docs
-
-
-
-to start web app 
-inside webapp/webapp
-```commandline
-uvicorn app.main:app --reload --port 8080
-
-start with PC ip
- uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
-
-
-```
-
 ## Setup
-first time setup guide 
 
-place **.env** file into risk engine folder
+1. Install dependencies.
+
+```powershell
+pip install -r requirements.txt
 ```
+
+2. Create `risk_engine/.env`.
+
+```env
 RISK_ENGINE_ENFORCE_API_KEY=1
-
 ```
 
-Access the /setup route on the risk engine to generate API key for web app to use to connect to the risk engine.  
+3. Start the risk engine API from the project root.
 
-
-place **web.env** file into web_app/WebApp/app folder edit api key to own generated
-```
-RISK_ENGINE_API_KEY = "<API-KEY>"
+```powershell
+uvicorn risk_engine.api:app --reload --port 8003
 ```
 
+4. Call the setup endpoint once to generate `engine_state.json` and return an API key.
 
-## Risk Engine API key 
+```powershell
+$setup = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8003/setup
+$setup.api_key
+```
 
-every request from web need to tag along API key to secure the RBA API
+5. Create `web_app/WebApp/app/web.env` and paste the generated API key.
+  You can get it from `engine_state.json` or directly from `$setup.api_key`.
 
+```env
+RISK_ENGINE_API_KEY="<API-KEY>"
+```
 
+6. Start the web app in another terminal.
 
+```powershell
+cd web_app\WebApp
+uvicorn app.main:app --reload --port 8080
+```
 
+Optional (for LAN testing):
 
+```powershell
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+```
 
+## Useful Local URLs
 
-## Cookie API 
+- Risk engine docs: `http://127.0.0.1:8003/docs`
+- Risk engine dashboard: `http://127.0.0.1:8003`
+- Web app: `http://127.0.0.1:8080`
 
-```route
+Use the generated API key to log in to the risk engine dashboard.
+
+## Risk Engine API Key
+
+Every request from the web app to the risk engine must include this API key.
+
+## Cookie API
+
+Route:
+
+```text
 /cookie/generate
 ```
+
 This endpoint is called server-to-server by the web application after a successful login. It returns either:
 
-a newly issued/rotated raw device token (to be delivered to the client by the web app), or
+- a newly issued or rotated raw device token (to be delivered to the client by the web app), or
+- no new token if rotation is not required.
 
-no new token if rotation is not required.
+Request and response format:
 
-endpoint JSON format
-```JSON
-accepts 
+```json
 {
-  "user_id": "string",
-  "device_id": "string",
-  "force_rotate": false (optional)
+  "request": {
+    "user_id": "string",
+    "device_id": "string",
+    "force_rotate": false
+  },
+  "response": {
+    "case": "first_issue | risk_rotate | periodic_rotate | no_rotate",
+    "rotate": true,
+    "raw_token": "string | null",
+    "expires_at_utc": "ISO-8601 string | null",
+    "cookie_name": "__Host_rba_dt"
+  }
 }
-
-return 
-{
-  "case": "first_issue | risk_rotate | periodic_rotate | no_rotate",
-  "rotate": true,
-  "raw_token": "string | null",
-  "expires_at_utc": "ISO-8601 string | null",
-  "cookie_name": "__Host_rba_dt"
-}
 ```
 
+## Cookie Names
 
+`app_device_id`
 
-## Cookie Name
-**app_device_id**
+Web-application-issued, opaque device identifier used for login continuity and risk context across sessions.
 
-Web-application–issued, opaque device identifier used for login continuity and risk context across sessions.
+`__Host_rba_dt`
 
-**__Host_rba_dt**
+Risk-engine-issued trusted device token used to recognize previously verified devices after successful authentication.
 
-Risk-engine–issued trusted device token used to recognize previously verified devices after successful authentication.
+Cookie security expectations:
 
+```text
+HttpOnly: prevents JavaScript access (XSS protection)
+Secure: sent only over HTTPS (production)
+SameSite=Lax: mitigates CSRF while allowing normal navigation
+Path=/: available across the entire application
+Domain not set: host-only to prevent subdomain injection
+Max-Age: max age of cookie
 ```
-HttpOnly – prevents JavaScript access (XSS protection)
-
-Secure – sent only over HTTPS (production)
-
-SameSite=Lax – mitigates CSRF while allowing normal navigation
-
-Path=/ – available across the entire application
-
-Domain not set – host-only to prevent subdomain injection
-
-Max-Age – max age of cookie
-```
-
-## accessing dashboard
-visit http://127.0.0.1:8003 and enter api key

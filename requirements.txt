@@ -11,9 +11,13 @@ Jinja2==3.1.6
 python-multipart==0.0.21
 itsdangerous==2.2.0
 
+# Auth / password hashing
+passlib==1.7.4
+
 # 2FA / OTP
 pyotp==2.9.0
 qrcode==7.4.2
+pillow==10.4.0
 
 # HTTP client (web -> risk engine)
 httpx==0.28.1

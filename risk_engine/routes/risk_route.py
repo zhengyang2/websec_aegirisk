@@ -117,10 +117,12 @@ def authResult(request: RiskAuthResultRequestJSON, db: Session = Depends(get_db)
         evt.status = "confirmed_success"
         db.commit()
 
+        device_token_for_baseline = request.device_token or evt.device_token
+
         update_baseline_on_success(
             db=db,
             username=evt.username,
-            device_token=evt.device_token,
+            device_token=device_token_for_baseline,
             ip_prefix=evt.ip_prefix
         )
         db.commit()

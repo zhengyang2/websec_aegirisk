@@ -34,7 +34,12 @@ ENV_PATH = BASE_DIR +"/web.env"
 app = FastAPI(title="Mock WebApp (Register/Login + Adaptive 2FA)")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-app.add_middleware(SessionMiddleware, secret_key="dev-secret-change-me", https_only=False)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="dev-secret-change-me",
+    https_only=False,
+    session_cookie="webapp_session",
+)
 
 @app.on_event("startup")
 def on_startup():
@@ -51,12 +56,10 @@ def make_qr_data_uri(text: str) -> str:
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
 
-
 load_dotenv(dotenv_path=ENV_PATH)
 
 RISK_ENGINE_URL = os.getenv("RISK_ENGINE_URL", "http://127.0.0.1:8003")
-RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY", "")
-
+RISK_ENGINE_API_KEY = os.getenv("RISK_ENGINE_API_KEY")
 
 if not RISK_ENGINE_API_KEY:
     print("[risk] warning: RISK_ENGINE_API_KEY is not set; risk engine calls may return 401", flush=True)
@@ -81,15 +84,19 @@ def call_risk_engine(context_features: dict) -> dict:
         return {"decision": "allow", "score": 0, "reasons": ["risk_engine_unavailable"]}
 
 
-def call_risk_auth_result(event_id: int, outcome: str):
+def call_risk_auth_result(event_id: int, outcome: str, device_token: str | None = None):
 
     headers = {}
     if RISK_ENGINE_API_KEY:
         headers["X-API-Key"] = RISK_ENGINE_API_KEY  # matches your require_api_key dependency style
 
     try:
+        payload = {"event_id": event_id, "outcome": outcome}
+        if device_token:
+            payload["device_token"] = device_token
+
         with httpx.Client(timeout=2.0) as client:
-            resp = client.post(f"{RISK_ENGINE_URL}/risk/auth-result", json={"event_id": event_id, "outcome": outcome}, headers=headers)
+            resp = client.post(f"{RISK_ENGINE_URL}/risk/auth-result", json=payload, headers=headers)
             resp.raise_for_status()
             print(resp.json())
             return resp.json()
@@ -142,6 +149,37 @@ def check_cookie_action(request, user):
         return new_device_id, None
 
     return new_device_id, data
+
+
+def attach_device_cookies_for_user(request: Request, response, username: str) -> str | None:
+    device_id, token_data = check_cookie_action(request, username)
+    device_token_for_baseline = request.cookies.get("__Host_rba_dt")
+
+    if device_id:
+        set_cookie(
+            response,
+            name="app_device_id",
+            value=device_id,
+            kind=CookieProfile.APP_DEVICE_ID,
+            is_prod=False,
+        )
+
+    if token_data and token_data.get("case") != "no_rotate":
+        expires_at = token_data.get("expires_at_utc")
+        expires_dt = parse_utc_expires(expires_at)
+
+        set_cookie(
+            response,
+            name=token_data.get("cookie_name"),
+            value=token_data.get("raw_token"),
+            kind=CookieProfile.RISK_ENGINE_TOKEN,
+            is_prod=False,
+            expires=expires_dt,
+            max_age=None,
+        )
+        device_token_for_baseline = token_data.get("raw_token")
+
+    return device_token_for_baseline
 
 def parse_utc_expires(ts: str) -> datetime:
     """
@@ -264,13 +302,16 @@ def login(
             return RedirectResponse(url="/2fa/setup/required", status_code=303)
 
     # Otherwise: login completes immediately (ALLOW)
+    response = RedirectResponse(url="/", status_code=303)
+
     request.session["username"] = user.username
+    device_token_for_baseline = attach_device_cookies_for_user(request, response, user.username)
 
     if event_id is not None:
-        call_risk_auth_result(event_id, "success")
+        call_risk_auth_result(event_id, "success", device_token_for_baseline)
         request.session.pop("risk_event_id", None)
 
-    return RedirectResponse(url="/", status_code=303)
+    return response
 
 @app.post("/logout")
 def logout(request: Request):
@@ -317,12 +358,15 @@ def twofa_verify(request: Request, code: str = Form(...)):
     request.session.pop("pending_2fa_user_id", None)
     request.session["username"] = row["username"]
 
+    response = RedirectResponse(url="/", status_code=303)
+    device_token_for_baseline = attach_device_cookies_for_user(request, response, row["username"])
+
     # NEW: finalize success in risk engine (baseline update happens there)
     if event_id is not None:
-        call_risk_auth_result(event_id, "success")
+        call_risk_auth_result(event_id, "success", device_token_for_baseline)
         request.session.pop("risk_event_id", None)
 
-    return RedirectResponse(url="/", status_code=303)
+    return response
 
 # -------------------------
 # 2FA Setup (Enable/Disable)
@@ -376,6 +420,8 @@ def twofa_setup_required_confirm(request: Request, code: str = Form(...)):
     if not temp_secret:
         return RedirectResponse(url="/2fa/setup/required", status_code=303)
 
+    event_id = request.session.get("risk_event_id")
+
     if not verify_totp(temp_secret, code):
         issuer = "MockWebApp"
         otp_uri = pyotp.TOTP(temp_secret).provisioning_uri(name=user.username, issuer_name=issuer)
@@ -396,8 +442,19 @@ def twofa_setup_required_confirm(request: Request, code: str = Form(...)):
     set_2fa_for_user(user.id, temp_secret)
     request.session.pop("twofa_temp_secret", None)
 
-    # Now redirect to 2FA verification
-    return RedirectResponse(url="/2fa", status_code=303)
+    # Setup confirmation already proves possession of authenticator,
+    # so finalize login directly to avoid losing pending session state.
+    request.session.pop("pending_2fa_user_id", None)
+    request.session["username"] = user.username
+
+    response = RedirectResponse(url="/", status_code=303)
+    device_token_for_baseline = attach_device_cookies_for_user(request, response, user.username)
+
+    if event_id is not None:
+        call_risk_auth_result(event_id, "success", device_token_for_baseline)
+        request.session.pop("risk_event_id", None)
+
+    return response
 
 @app.get("/2fa/setup", response_class=HTMLResponse)
 def twofa_setup(request: Request):

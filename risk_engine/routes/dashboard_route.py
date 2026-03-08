@@ -117,18 +117,22 @@ def admin_login_form(request: Request):
 @dashboard_router.post("/login")
 def admin_login(request: Request, api_key: str = Form(...), csrf_token: str = Form(...), db: Session = Depends(get_db)):
     key = _client_key(request)
-    csrf_session_token = get_csrf_token(request)
     
     # Verify CSRF token
     try:
         verify_csrf_token(request, csrf_token)
-    except HTTPException:
+    except HTTPException as e:
         log_login_attempt(request, success=False, reason="Invalid CSRF token")
+        error_message = "Invalid security token. Please try again."
+        if "missing from session" in str(e.detail).lower():
+            error_message = "Security session expired. Please refresh and try again."
         return templates.TemplateResponse(
             "admin_login.html",
-            {"request": request, "error": "Invalid security token. Please try again.", "csrf_token": csrf_session_token},
+            {"request": request, "error": error_message, "csrf_token": get_csrf_token(request)},
             status_code=403,
         )
+
+    csrf_session_token = request.session.get("csrf_token") or get_csrf_token(request)
     
     remaining = _lockout_remaining(key)
     if remaining > 0:
@@ -425,10 +429,6 @@ def update_risk_config(request: Request, config_update: RiskConfigUpdate, db: Se
         # Preserve impossible_travel settings from old config (not exposed in UI)
         if "impossible_travel" in old_config:
             new_config["impossible_travel"] = old_config["impossible_travel"]
-        
-        # Preserve impossible_travel risk score from old config
-        if "impossible_travel" in old_config.get("risk_scores", {}):
-            new_config["risk_scores"]["impossible_travel"] = old_config["risk_scores"]["impossible_travel"]
         
         # Preserve legacy baseline fields if they exist (not exposed in UI)
         if "baseline" in old_config:

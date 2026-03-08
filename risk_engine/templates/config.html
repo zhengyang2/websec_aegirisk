@@ -44,6 +44,10 @@
         Missing User Agent:
         <input type="number" id="score_missing_user_agent" min="0">
       </label>
+      <label title="Adds points when login appears to involve impossible travel speed between recent locations.">
+        Impossible Travel:
+        <input type="number" id="score_impossible_travel" min="0">
+      </label>
     </div>
 
     <div class="config-group">
@@ -134,6 +138,7 @@
     document.getElementById('score_new_ip_prefix').value = config.risk_scores.new_ip_prefix;
     document.getElementById('score_unusual_login_time').value = config.risk_scores.unusual_login_time;
     document.getElementById('score_missing_user_agent').value = config.risk_scores.missing_user_agent;
+    document.getElementById('score_impossible_travel').value = config.risk_scores.impossible_travel;
     
     document.getElementById('threshold_block').value = config.decision_thresholds.block;
     document.getElementById('threshold_challenge').value = config.decision_thresholds.challenge;
@@ -202,7 +207,8 @@
         new_device: parseInt(document.getElementById('score_new_device').value),
         new_ip_prefix: parseInt(document.getElementById('score_new_ip_prefix').value),
         unusual_login_time: parseInt(document.getElementById('score_unusual_login_time').value),
-        missing_user_agent: parseInt(document.getElementById('score_missing_user_agent').value)
+        missing_user_agent: parseInt(document.getElementById('score_missing_user_agent').value),
+        impossible_travel: parseInt(document.getElementById('score_impossible_travel').value)
       },
       decision_thresholds: {
         block: parseInt(document.getElementById('threshold_block').value),
